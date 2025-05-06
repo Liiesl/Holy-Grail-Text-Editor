@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+   <meta charset="UTF-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+   <title>Holy Grail Type Editor</title>
+   <link rel="stylesheet" href="style.css">
+   <link rel="stylesheet" href="slashCommand.css">
+   <link rel="stylesheet" href="sidebar.css">
+   <link rel="stylesheet" href="textStyleModal.css"> <!-- ADDED THIS LINE -->
+   <script src="https://cdnjs.cloudflare.com/ajax/libs/turndown/7.0.0/turndown.js"></script>
+   <script src="https://cdnjs.cloudflare.com/ajax/libs/showdown/2.1.0/showdown.min.js"></script>
+   <script src="https://cdnjs.cloudflare.com/ajax/libs/diff_match_patch/20121119/diff_match_patch.js"></script>
+   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+</head>
+<body>
+   <div class="container">
+       <aside class="sidebar">
+           <!-- Projects H2 and page tree will be populated by sidePanel.js -->
+           <div id="projects-heading-container">
+               <!-- H2 with actions will go here -->
+           </div>
+           <div id="page-tree">
+               <!-- Project list and page trees will be populated here -->
+           </div>
+       </aside>
+       <main class="editor-area">
+           <h3 id="current-page-display">No page selected</h3>
+           <div class="editor-panes">
+               <div id="live-editor" contenteditable="true" class="pane" data-placeholder="Write here... Type '/' for commands."></div>
+           </div>
+           <button id="save-page-btn" disabled>Save Changes</button>
+           <p id="status-message"></p>
+       </main>
+   </div>
+
+   <!-- Slash Command Modal -->
+   <div id="slash-command-modal" style="display:none;">
+       <ul>
+           <li data-command="h1">
+               <span class="command-icon-text">H1</span>
+               <span class="command-text">Heading 1</span>
+           </li>
+           <li data-command="h2">
+               <span class="command-icon-text">H2</span>
+               <span class="command-text">Heading 2</span>
+           </li>
+           <li data-command="h3">
+               <span class="command-icon-text">H3</span>
+               <span class="command-text">Heading 3</span>
+           </li>
+           <li data-command="paragraph">
+               <i class="fas fa-paragraph command-icon"></i>
+               <span class="command-text">Paragraph</span>
+           </li>
+           <li data-command="create-subpage">
+               <i class="fas fa-file-plus command-icon"></i>
+               <span class="command-text">Create Subpage</span>
+           </li>
+       </ul>
+   </div>
+
+   <!-- Contextual Actions Modal -->
+   <div id="actions-modal" class="modal" style="display:none;">
+       <div class="modal-content">
+           <ul id="actions-modal-list">
+               <!-- Actions will be populated here by JS -->
+           </ul>
+       </div>
+   </div>
+
+   <!-- Text Styling Modal - ADDED THIS BLOCK -->
+   <div id="text-style-modal" class="text-style-modal" style="display:none;">
+       <!-- REMOVED THE SELECT ELEMENT FOR formatBlock -->
+       <button data-command="bold" title="Bold (Ctrl+B)"><i class="fas fa-bold"></i></button>
+       <button data-command="italic" title="Italic (Ctrl+I)"><i class="fas fa-italic"></i></button>
+       <button data-command="underline" title="Underline (Ctrl+U)"><i class="fas fa-underline"></i></button>
+       <button data-command="strikeThrough" title="Strikethrough"><i class="fas fa-strikethrough"></i></button>
+       <button data-command="createLink" title="Create/Edit Link"><i class="fas fa-link"></i></button>
+       <!-- <button data-command="insertUnorderedList" title="Bullet List"><i class="fas fa-list-ul"></i></button> -->
+       <!-- <button data-command="insertOrderedList" title="Numbered List"><i class="fas fa-list-ol"></i></button> -->
+   </div>
+   <!-- End of Text Styling Modal -->
+
+
+   <script type="module" src="main.js"></script>
+</body>
+</html>

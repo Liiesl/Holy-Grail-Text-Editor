@@ -1,0 +1,309 @@
+/* -------------------- */
+/* --- SIDEBAR --- */
+/* -------------------- */
+.sidebar {
+    width: var(--sidebar-width);
+    background-color: var(--bg-secondary);
+    color: var(--text-secondary);
+    padding: 20px 15px;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    border-right: 1px solid var(--border-color-primary);
+}
+
+/* Projects Heading Area */
+#projects-heading-container {
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-color-primary);
+}
+
+.projects-h2-wrapper {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.projects-h2-wrapper h2 {
+    font-size: 0.9em;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0; 
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.projects-h2-wrapper h2 .fas { 
+    font-size: 1.1em;
+    color: var(--text-secondary);
+}
+
+.sidebar-actions-group { /* Common style for all action groups in sidebar */
+    display: flex;
+    align-items: center;
+    gap: 6px; /* Slightly reduced gap */
+}
+/* Action group for project H2 is always visible */
+.projects-h2-wrapper .sidebar-actions-group {
+    display: flex;
+}
+
+
+.sidebar-action-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: var(--border-radius-sm);
+    font-size: 0.9em; 
+    line-height: 1;
+}
+.sidebar-action-btn:hover {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+
+#page-tree {
+    flex-grow: 1;
+    overflow-y: auto;
+    font-size: 0.95em;
+}
+
+/* Styles for the list of projects itself */
+.project-list {
+    list-style-type: none;
+    padding-left: 0;
+}
+
+/* Individual Project Item (LI) */
+.project-item {
+    margin-bottom: 3px;
+    position: relative; 
+}
+
+/* Header for each project (clickable part) */
+.project-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    cursor: pointer;
+    border-radius: var(--border-radius);
+    transition: background-color 0.15s ease, color 0.15s ease;
+    font-weight: 500;
+    color: var(--text-secondary);
+    position: relative; /* Needed for absolute positioning of its action group */
+}
+.project-header:hover {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+.project-item.active-project .project-header {
+    background-color: rgba(46, 115, 232, 0.20); /* var(--accent-primary-bg-light) */
+    color: var(--accent-primary);
+}
+.project-item.active-project .project-header .fas { /* All icons in active project header */
+    color: var(--accent-primary);
+}
+/* Note: .project-expand-icon color already covered by general .fas rule above for active state */
+
+
+.project-header .project-expand-icon {
+    font-size: 0.8em;
+    width: 12px;
+    text-align: center;
+    transition: transform 0.15s ease;
+    /* color: var(--text-secondary); Default color inherited or set by active state */
+    flex-shrink: 0;
+}
+
+.project-header .fas:not(.project-expand-icon) { /* Project type icon (fa-book) */
+    /* color: var(--text-secondary); Default color inherited or set by active state */
+    font-size: 0.9em;
+    width: 16px;
+    text-align: center;
+    flex-shrink: 0;
+}
+.project-header .project-name-text {
+    flex-grow: 1;
+    min-width: 0; /* Crucial for ellipsis to work in flex item */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding-right: 45px; /* Space for hover actions, adjust if button count/size changes */
+}
+
+/* Action buttons for project item (on hover) */
+.project-header .sidebar-actions-group {
+    display: none; /* Initially hidden */
+    position: absolute;
+    right: 5px;
+    top: 50%;
+    transform: translateY(-50%);
+    background-color: var(--bg-tertiary); /* Match hover or slightly different */
+    padding: 3px 5px;
+    border-radius: var(--border-radius-sm);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    gap: 4px; /* Smaller gap for compact group */
+}
+.project-header:hover .sidebar-actions-group {
+    display: flex;
+}
+/* Prevent actions showing if a modal is open over it or similar */
+.project-header .sidebar-actions-group .sidebar-action-btn {
+    font-size: 0.85em; /* Slightly smaller for item actions */
+}
+
+
+/* Container for the actual page tree of a project */
+.project-pages-container {
+    padding-left: 0px; /* Root UL will handle first indent */
+}
+
+.project-pages-container ul {
+    list-style-type: none;
+    padding-left: 15px; /* Indent for first level of pages */
+    margin-top: 2px; /* Small space between project header and first page */
+}
+.project-pages-container ul ul {
+    padding-left: 15px; /* Consistent indent for nested sub-pages */
+}
+
+.project-pages-container li { /* Represents a page item */
+    margin-bottom: 2px;
+    /* position: relative; Not needed here, page-item-content will be relative */
+}
+
+.project-pages-container .page-item-content {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px; /* Slightly less padding for page items */
+    cursor: pointer;
+    border-radius: var(--border-radius);
+    transition: background-color 0.15s ease, color 0.15s ease;
+    word-break: break-word; /* Should not be needed with ellipsis */
+    position: relative; /* For absolute positioning of its action group */
+}
+
+.project-pages-container .page-item-content .page-title-text {
+    flex-grow: 1;
+    min-width: 0; /* Crucial for ellipsis */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding-right: 45px; /* Space for hover actions */
+}
+
+.project-pages-container .page-item-content .fas { /* Page icon */
+    color: var(--text-secondary);
+    font-size: 0.9em;
+    width: 16px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.project-pages-container li .page-item-content:hover {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.project-pages-container li.active-page .page-item-content {
+    background-color: rgba(46, 115, 232, 0.15); /* var(--accent-primary-bg-light) */
+    color: var(--accent-primary);
+    font-weight: 500;
+}
+.project-pages-container li.active-page .page-item-content .fas {
+    color: var(--accent-primary);
+}
+
+/* Action buttons for page item (on hover) */
+.project-pages-container .page-item-content .sidebar-actions-group {
+    display: none; /* Initially hidden */
+    position: absolute;
+    right: 5px;
+    top: 50%;
+    transform: translateY(-50%);
+    background-color: var(--bg-tertiary);
+    padding: 3px 5px;
+    border-radius: var(--border-radius-sm);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    gap: 4px;
+}
+.project-pages-container .page-item-content:hover .sidebar-actions-group {
+    display: flex;
+}
+.project-pages-container .page-item-content .sidebar-actions-group .sidebar-action-btn {
+    font-size: 0.85em;
+}
+
+/* Placeholder message if no subpages */
+.project-pages-container .no-subpages-message {
+    font-style: italic;
+    color: var(--text-secondary);
+    padding: 5px 10px 5px 25px; /* Align with page items */
+    font-size: 0.9em;
+}
+
+
+/* -------------------- */
+/* --- ACTIONS MODAL --- */
+/* -------------------- */
+.modal {
+    display: none; 
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0,0,0,0.5); 
+    color: var(--text-primary);
+}
+
+.modal-content {
+    background-color: var(--bg-secondary);
+    margin: 15% auto;
+    padding: 0; 
+    border: 1px solid var(--border-color-primary);
+    border-radius: var(--border-radius-lg);
+    width: 80%;
+    min-width: 300px; 
+    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+}
+
+#actions-modal-list {
+    list-style: none;
+    padding: 10px 0; 
+    margin: 0;
+}
+
+#actions-modal-list li {
+    padding: 12px 20px;
+    cursor: pointer;
+    font-size: 0.95em;
+    border-bottom: 1px solid var(--border-color-secondary);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+#actions-modal-list li:last-child {
+    border-bottom: none;
+}
+
+#actions-modal-list li:hover {
+    background-color: var(--bg-tertiary);
+    color: var(--accent-primary);
+}
+#actions-modal-list li .fas {
+    width: 16px; 
+    text-align: center;
+    color: var(--text-secondary); /* Default icon color in modal */
+}
+#actions-modal-list li:hover .fas {
+    color: var(--accent-primary); /* Icon color on hover */
+}

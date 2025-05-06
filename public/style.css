@@ -1,0 +1,279 @@
+/* --- START OF FILE style.css --- */
+
+/* -------------------- */
+/* --- GLOBAL RESET & VARIABLES --- */
+/* -------------------- */
+:root {
+    --bg-primary: #191919; /* Notion-like very dark gray */
+    --bg-secondary: #202020; /* Slightly lighter for elements like sidebar */
+    --bg-tertiary: #2f2f2f; /* Hover states, modals */
+    --bg-input: #252525;
+    --bg-embed: #282828; /* Slightly lighter than input, for embeds */
+    --bg-overlay: rgba(0, 0, 0, 0.5); /* For potential future overlays */
+
+    --text-primary: #e0e0e0; /* Light gray for main text */
+    --text-secondary: #a0a0a0; /* Dimmer text */
+    --text-placeholder: #6c6c6c;
+    --text-inverted: #111; /* For elements on light backgrounds if any */
+    --text-embed-link: #c0c0c0; /* Custom color for embed links - brighter than secondary */
+
+
+    --border-color-primary: #333333;
+    --border-color-secondary: #4a4a4a; /* For active/focused states */
+
+    --accent-primary: #2E73E8; /* Notion's blue */
+    --accent-primary-hover: #255dba;
+    --accent-positive: #30D158; /* Green for success */
+    --accent-negative: #FF453A; /* Red for errors */
+    --accent-neutral: #57A6FF; /* Blue for info */
+
+    --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+    --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+
+    --sidebar-width: 260px;
+    --header-height: 50px; /* Example, if you had a fixed header */
+    --border-radius: 6px; /* Softer radius */
+    --border-radius-small: 4px; /* For smaller elements like embeds */
+    --medium-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: var(--font-sans);
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    display: flex;
+    min-height: 100vh;
+    font-size: 15px; /* Base font size */
+    line-height: 1.5;
+}
+
+.container {
+    display: flex;
+    width: 100%;
+}
+
+/* -------------------- */
+/* --- EDITOR AREA --- */
+/* -------------------- */
+.editor-area {
+    flex-grow: 1;
+    padding: 25px 40px; /* More spacious padding */
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto; /* Allows editor content to scroll independently if needed */
+    max-width: 80%;
+}
+
+#current-page-display {
+    margin-bottom: 25px;
+    font-size: 1.8em; /* Larger title */
+    font-weight: 600;
+    color: var(--text-primary);
+    line-height: 1.3;
+}
+
+.editor-panes { /* This is the container for live-editor */
+    display: flex;
+    flex-grow: 1;
+    min-height: 400px; /* Ensure editor has decent minimum height */
+}
+
+/* Live Editor Pane (#live-editor uses .pane class) */
+.pane#live-editor {
+    flex: 1;
+    background-color: var(--bg-primary); 
+    color: var(--text-primary);
+    border-radius: var(--border-radius);
+    outline: none; /* Remove focus outline from contenteditable */
+    line-height: 1.7; /* Better for long-form text */
+    font-size: 1rem; /* Base content font size */
+}
+
+/* Placeholder for contenteditable */
+.pane#live-editor.is-empty::before { /* Changed from [data-placeholder]:empty to .is-empty for JS consistency */
+    content: attr(data-placeholder);
+    color: var(--text-placeholder);
+    pointer-events: none; /* Crucial */
+    display: block; 
+}
+
+/* Content styling within the live editor */
+#live-editor h1, #live-editor h2, #live-editor h3,
+#live-editor h4, #live-editor h5, #live-editor h6 {
+    margin-top: 1.5em;
+    margin-bottom: 0.5em;
+    font-weight: 600;
+    line-height: 1.3;
+    color: var(--text-primary); 
+}
+#live-editor h1 { font-size: 2em; }
+#live-editor h2 { font-size: 1.6em; }
+#live-editor h3 { font-size: 1.3em; }
+
+#live-editor p {
+    margin-bottom: 1em;
+}
+#live-editor ul, #live-editor ol {
+    padding-left: 2em; 
+    margin-bottom: 1em;
+}
+#live-editor li {
+    margin-bottom: 0.3em;
+}
+
+/* General link styling */
+#live-editor a {
+    color: var(--accent-neutral);
+    text-decoration: none;
+    cursor: pointer; /* General pointer for links */
+}
+#live-editor a:hover {
+    text-decoration: underline;
+}
+
+/* Embedded Page Link Styling (Notion-like) */
+#live-editor a[href^="page://"] {
+    display: inline-flex; /* Align icon and text, allows element to wrap like inline content */
+    align-items: center;
+    background-color: var(--bg-embed); /* Custom slightly lighter background */
+    border: 1px solid var(--border-color-primary);
+    padding: 3px 8px; /* Slightly more padding */
+    border-radius: var(--border-radius-small); /* Slightly smaller radius */
+    text-decoration: none; /* Override general link styles */
+    color: var(--text-embed-link); /* UPDATED: Brighter color for better contrast */
+    font-weight: 600; /* UPDATED: Make text bold (semi-bold) */
+    margin: 0 3px; /* Small horizontal margin */
+    max-width: 350px; /* Max width of the embed element */
+    overflow: hidden; /* Required for text-overflow */
+    white-space: nowrap; /* Prevent text inside from wrapping */
+    text-overflow: ellipsis; /* Add ... if text is too long */
+    vertical-align: middle; /* Align with surrounding text better */
+    font-size: 0.9em; /* Slightly smaller font for the embed */
+    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    cursor: pointer; /* UPDATED: Explicitly set pointer */
+}
+
+#live-editor a[href^="page://"]::before {
+    font-family: "Font Awesome 6 Free"; /* Font Awesome solid icons */
+    font-weight: 900; /* Use solid style for FA6 */
+    content: "\f15c"; /* fa-file-lines icon (document icon) */
+    margin-right: 7px; /* Slightly more Space between icon and text */
+    flex-shrink: 0; /* Prevent icon from shrinking if text is long */
+    /* Icon color will inherit from parent 'a' tag's color */
+}
+
+#live-editor a[href^="page://"]:hover {
+    background-color: var(--bg-tertiary);
+    border-color: var(--border-color-secondary);
+    color: var(--text-primary); /* Text becomes primary (brightest) on hover */
+    text-decoration: none; /* Ensure no underline on hover */
+    cursor: pointer; /* UPDATED: Ensure pointer on hover */
+}
+/* End of Embedded Page Link Styling */
+
+#live-editor img {
+    max-width: 100%;
+    height: auto;
+    border-radius: var(--border-radius);
+    margin: 15px 0;
+    border: 1px solid var(--border-color-primary); 
+}
+#live-editor blockquote {
+    border-left: 3px solid var(--accent-primary);
+    padding-left: 1em;
+    margin-left: 0;
+    margin-right: 0;
+    font-style: italic;
+    color: var(--text-secondary);
+}
+#live-editor pre {
+    background-color: var(--bg-input);
+    padding: 1em;
+    border-radius: var(--border-radius);
+    overflow-x: auto;
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+    color: var(--text-primary);
+}
+#live-editor code {
+    font-family: var(--font-mono);
+    background-color: var(--bg-input);
+    padding: 0.2em 0.4em;
+    border-radius: 3px;
+    font-size: 0.9em;
+}
+#live-editor pre code {
+    padding: 0;
+    background-color: transparent;
+    font-size: inherit;
+}
+
+/* -------------------- */
+/* --- SAVE BUTTON & STATUS --- */
+/* -------------------- */
+#save-page-btn {
+    padding: 10px 20px;
+    background-color: var(--accent-positive); /* Green for save */
+    color: white;
+    border: none;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    margin-top: 20px;
+    align-self: flex-start;
+    font-size: 0.95em;
+    font-weight: 500;
+    transition: background-color 0.15s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+#save-page-btn:disabled {
+    background-color: var(--bg-tertiary);
+    color: var(--text-secondary);
+    cursor: not-allowed;
+}
+#save-page-btn:hover:not(:disabled) {
+    background-color: #28a745; /* Darker green */
+}
+
+#status-message {
+    margin-top: 15px;
+    font-size: 0.9em;
+    min-height: 1.2em; /* Reserve space */
+    font-weight: 500;
+}
+.success { color: var(--accent-positive); }
+.error { color: var(--accent-negative); }
+.info { color: var(--accent-neutral); }
+
+/* -------------------- */
+/* --- UTILITIES & SCROLLBARS --- */
+/* -------------------- */
+/* Minimalist scrollbar styling (Webkit browsers) */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+}
+::-webkit-scrollbar-thumb {
+    background: var(--bg-tertiary);
+    border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #555; /* Slightly lighter on hover */
+}
+/* For Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--bg-tertiary) var(--bg-secondary);
+}
+
+/* --- END OF FILE style.css --- */

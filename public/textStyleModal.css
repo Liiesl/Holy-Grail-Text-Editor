@@ -1,0 +1,43 @@
+/* --- START OF FILE textStyleModal.css --- */
+
+.text-style-modal {
+    position: absolute;
+    background-color: var(--bg-tertiary);
+    border: 1px solid var(--border-color-primary);
+    border-radius: var(--border-radius-small);
+    padding: 5px 8px;
+    box-shadow: var(--medium-shadow);
+    z-index: 1050; /* Above other elements like slash command */
+    display: none; /* Hidden by default */
+    align-items: center;
+    gap: 5px;
+    color: var(--text-primary);
+}
+
+.text-style-modal button { /* UPDATED: Removed , .text-style-modal select */
+    background-color: transparent;
+    border: none;
+    color: var(--text-secondary);
+    padding: 6px;
+    cursor: pointer;
+    border-radius: var(--border-radius-small);
+    font-size: 1em; /* Ensure icons are decently sized */
+    min-width: 30px; /* Ensure buttons have some width */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.text-style-modal button:hover { /* UPDATED: Removed , .text-style-modal select:hover */
+    background-color: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+}
+
+.text-style-modal button.active {
+    background-color: var(--accent-primary);
+    color: white;
+}
+
+/* REMOVED CSS for .text-style-modal select and .text-style-modal select option */
+
+/* --- END OF FILE textStyleModal.css --- */
