@@ -3,7 +3,7 @@
 .text-style-modal {
     position: absolute;
     background-color: var(--bg-tertiary);
-    border: 1px solid var(--border-color-primary);
+    border: 1px solid var(--border-color-secondary); /* Darker border for better contrast with buttons */
     border-radius: var(--border-radius-small);
     padding: 5px 8px;
     box-shadow: var(--medium-shadow);

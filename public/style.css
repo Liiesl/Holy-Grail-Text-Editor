@@ -7,7 +7,7 @@
     --bg-primary: #191919; /* Notion-like very dark gray */
     --bg-secondary: #202020; /* Slightly lighter for elements like sidebar */
     --bg-tertiary: #2f2f2f; /* Hover states, modals */
-    --bg-input: #252525;
+    --bg-input: #2c2c2c;
     --bg-embed: #282828; /* Slightly lighter than input, for embeds */
     --bg-overlay: rgba(0, 0, 0, 0.5); /* For potential future overlays */
 
@@ -67,7 +67,8 @@ body {
     display: flex;
     flex-direction: column;
     overflow-y: auto; /* Allows editor content to scroll independently if needed */
-    max-width: 80%;
+    max-width: 80%; /* REMOVED this for full width editor area - or adjust as needed */
+    position: relative; /* Needed for absolute positioning of children if any related to editor area */
 }
 
 #current-page-display {
@@ -91,7 +92,7 @@ body {
     color: var(--text-primary);
     border-radius: var(--border-radius);
     outline: none; /* Remove focus outline from contenteditable */
-    line-height: 1.7; /* Better for long-form text */
+    line-height: 1.5; /* Better for long-form text */
     font-size: 1rem; /* Base content font size */
 }
 
@@ -106,7 +107,7 @@ body {
 /* Content styling within the live editor */
 #live-editor h1, #live-editor h2, #live-editor h3,
 #live-editor h4, #live-editor h5, #live-editor h6 {
-    margin-top: 1.5em;
+    margin-top: 1em;
     margin-bottom: 0.5em;
     font-weight: 600;
     line-height: 1.3;
@@ -117,11 +118,11 @@ body {
 #live-editor h3 { font-size: 1.3em; }
 
 #live-editor p {
-    margin-bottom: 1em;
+    margin-bottom: 0.5em;
 }
 #live-editor ul, #live-editor ol {
     padding-left: 2em; 
-    margin-bottom: 1em;
+    margin-bottom: 0.5em;
 }
 #live-editor li {
     margin-bottom: 0.3em;
@@ -214,6 +215,39 @@ body {
     font-size: inherit;
 }
 
+/* NEW: Table Styling */
+#live-editor table {
+    width: auto; /* Or 100% if you prefer full-width tables */
+    border-collapse: collapse;
+    margin: 1em 0;
+    border: 1px solid var(--border-color-secondary); /* Outer border for the table */
+    position: relative; /* For positioning inline controls */
+}
+
+#live-editor th,
+#live-editor td {
+    border: 1px solid var(--border-color-primary);
+    padding: 8px 12px; /* More padding */
+    text-align: left;
+    vertical-align: top; /* Align content to the top of cells */
+    min-width: 80px; /* Minimum width for cells to be usable */
+    min-height: calc(1.5em + 16px); /* Ensures cell has height for one line of text (1.5em = font-size * line-height) + vertical padding (16px = 8px top + 8px bottom) */
+}
+
+#live-editor th {
+    background-color: var(--bg-secondary); /* Slightly different background for headers */
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* Ensure paragraphs inside table cells don't have excessive margins */
+#live-editor td p,
+#live-editor th p {
+    margin-bottom: 0; 
+}
+/* End of Table Styling */
+
+
 /* -------------------- */
 /* --- SAVE BUTTON & STATUS --- */
 /* -------------------- */
@@ -274,6 +308,127 @@ body {
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--bg-tertiary) var(--bg-secondary);
+}
+
+/* -------------------- */
+/* --- Table Controls (Inline) --- */
+/* -------------------- */
+
+.table-control-base {
+    position: absolute;
+    background-color: var(--bg-tertiary);
+    border: 1px solid var(--border-color-primary);
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: var(--medium-shadow);
+    z-index: 1015; /* Above editor content, below textStyleModal (1050) */
+    transition: background-color 0.1s ease, color 0.1s ease, transform 0.05s ease, opacity 0.15s ease;
+    opacity: 0; /* Hidden by default, shown on hover trigger */
+}
+.table-control-base:hover {
+    background-color: var(--accent-primary);
+    color: white;
+    opacity: 1;
+    transform: scale(1.05); /* Slightly less aggressive scale */
+}
+.table-control-base.visible {
+    opacity: 0.85; /* Visible state before hover */
+}
+.table-control-base.visible:hover {
+    opacity: 1;
+}
+
+
+/* Add Line Buttons (Horizontal for Rows, Vertical for Columns) */
+/* This is now the main styled rectangle button */
+.table-control-add-line {
+    position: absolute;
+    background-color: var(--bg-tertiary); /* Default background like other controls */
+    border: 1px solid var(--border-color-primary); /* Default border */
+    color: var(--text-secondary); /* Default icon color */
+    box-shadow: var(--medium-shadow); /* Shadow like other controls */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 1016; /* Ensure it's visible */
+    opacity: 0;
+    transition: background-color 0.1s ease, color 0.1s ease, opacity 0.15s ease, transform 0.05s ease;
+    pointer-events: none; /* Container doesn't take events initially */
+}
+.table-control-add-line.visible {
+    opacity: 0.85; /* Matches .table-control-base.visible */
+    pointer-events: all; /* Enable events when visible */
+}
+.table-control-add-line:hover {
+    background-color: var(--accent-primary); /* Hover background like other controls */
+    color: white; /* Icon color changes to white on hover */
+    border-color: var(--accent-primary-hover); /* Optional: darker border on hover */
+    opacity: 1;
+    transform: scale(1.02); /* Subtle scale effect */
+}
+
+/* The ::before pseudo-element is no longer used for the visible line part */
+.table-control-add-line::before {
+    display: none;
+}
+
+.table-control-add-line .add-line-icon { /* The plus icon span */
+    font-size: 14px; /* Size of the '+' icon character */
+    color: inherit; /* Icon color is inherited from .table-control-add-line */
+    background-color: transparent; /* No background for the icon wrapper itself */
+    border: none; /* No border for the icon wrapper itself */
+    box-shadow: none; /* No shadow for the icon wrapper itself */
+    width: auto; /* Let the icon character determine width */
+    height: auto; /* Let the icon character determine height */
+    border-radius: 0; /* No rounded corners for the icon wrapper */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: all; /* Make sure icon part is clickable */
+}
+/* No separate hover effect for .add-line-icon, parent .table-control-add-line handles it */
+.table-control-add-line:hover .add-line-icon {
+    transform: none; /* Remove previous transform if any */
+}
+
+
+/* Horizontal Add Line (for Rows) */
+.table-control-add-line-h {
+    /* height will be set by JS to a fixed value (e.g., 20px) - this is the "thickness" of the bar */
+    /* width will be set by JS to table width */
+    left: 0; /* Aligns with table left, JS will adjust */
+}
+/* No ::before styling needed here anymore */
+
+
+/* Vertical Add Line (for Columns) */
+.table-control-add-line-v {
+    /* width will be set by JS to a fixed value (e.g., 20px) - this is the "thickness" of the bar */
+    /* height will be set by JS to table height */
+    top: 0; /* Aligns with table top, JS will adjust */
+}
+/* No ::before styling needed here anymore */
+
+
+/* Menu Trigger Button (...) */
+.table-control-menu-trigger {
+    /* Inherits from .table-control-base for opacity, z-index, transition */
+    border-radius: var(--border-radius-small);
+    width: 24px; /* Small rectangle */
+    height: 24px;
+    font-size: 14px; /* For ellipsis or icon */
+    padding: 0; /* Remove padding if icon is sized well */
+}
+.table-control-menu-trigger.visible {
+    opacity: 0.7;
+}
+.table-control-menu-trigger.visible:hover {
+    opacity: 1;
+    transform: scale(1.1);
 }
 
 /* --- END OF FILE style.css --- */

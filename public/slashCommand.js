@@ -13,7 +13,6 @@ export function initSlashCommand(appContext) {
     let searchQuery = '';
     
     const allCommands = [
-        // ... (allCommands definition remains the same)
         // Basic blocks
         { command: 'paragraph', short: 'p', icon: 'command-icon-text', iconText: 'P', text: 'Paragraph', description: 'Basic text block', category: 'Basic' },
         { command: 'h1', short: 'h1', icon: 'command-icon-text', iconText: 'H1', text: 'Heading 1', description: 'Large heading', category: 'Basic' },
@@ -29,6 +28,7 @@ export function initSlashCommand(appContext) {
         { command: 'divider', short: 'hr', icon: 'command-icon', iconClass: 'fas fa-minus', text: 'Divider', description: 'Insert a horizontal line', category: 'Media' },
         { command: 'code-block', short: 'cb', icon: 'command-icon', iconClass: 'fas fa-code', text: 'Code Block', description: 'Insert formatted code', category: 'Media' },
         { command: 'blockquote', short: 'bq', icon: 'command-icon', iconClass: 'fas fa-quote-left', text: 'Quote Block', description: 'Insert a blockquote', category: 'Media' },
+        { command: 'table', short: 'tbl', icon: 'command-icon', iconClass: 'fas fa-table', text: 'Table', description: 'Insert a 2x2 table', category: 'Media' },
         
         // Page operations
         { command: 'create-subpage', short: 'sp', icon: 'command-icon', iconClass: 'fas fa-file-plus', text: 'New Subpage', description: 'Create a new subpage and link it', category: 'Pages' },
@@ -82,7 +82,7 @@ export function initSlashCommand(appContext) {
 
     function findCurrentBlock(node) {
         let block = node.nodeType === Node.TEXT_NODE ? node.parentNode : node;
-        while (block && block !== liveEditor && !['P', 'H1', 'H2', 'H3', 'DIV', 'LI', 'BLOCKQUOTE', 'PRE'].includes(block.tagName)) {
+        while (block && block !== liveEditor && !['P', 'H1', 'H2', 'H3', 'DIV', 'LI', 'BLOCKQUOTE', 'PRE', 'TABLE'].includes(block.tagName)) { // Added TABLE
             block = block.parentNode;
         }
         return (block && block !== liveEditor) ? block : null;
@@ -269,7 +269,7 @@ export function initSlashCommand(appContext) {
         const scrollYBefore = editorArea ? editorArea.scrollTop : null;
         // console.log(`[SlashCommand DEBUG] executeCommand START for '${command}'. scrollYBefore: ${scrollYBefore}`);
 
-        const commandUsesTimeoutForFocus = ['checklist', 'code-block'].includes(command);
+        const commandUsesTimeoutForFocus = ['checklist', 'code-block', 'table'].includes(command); // ADDED 'table'
         const commandManipulatesSelectionAfterHR = command === 'divider';
 
 
@@ -298,15 +298,18 @@ export function initSlashCommand(appContext) {
             currentBlock.parentNode && 
             (currentBlock.innerHTML.trim() === '' || currentBlock.innerHTML.trim().toLowerCase() === '<br>')
         ) {
-            const newStandardEmptyBlock = document.createElement('p');
-            newStandardEmptyBlock.innerHTML = '<br>';
-            currentBlock.parentNode.replaceChild(newStandardEmptyBlock, currentBlock);
-            currentBlock = newStandardEmptyBlock;
-            const newRange = document.createRange();
-            newRange.setStart(currentBlock, 0); 
-            newRange.collapse(true);
-            sel.removeAllRanges();
-            sel.addRange(newRange);
+            // Only standardize if not a special block like LI or TABLE
+            if (!['LI', 'TD', 'TH'].includes(currentBlock.tagName)) {
+                const newStandardEmptyBlock = document.createElement('p');
+                newStandardEmptyBlock.innerHTML = '<br>';
+                currentBlock.parentNode.replaceChild(newStandardEmptyBlock, currentBlock);
+                currentBlock = newStandardEmptyBlock;
+                const newRange = document.createRange();
+                newRange.setStart(currentBlock, 0); 
+                newRange.collapse(true);
+                sel.removeAllRanges();
+                sel.addRange(newRange);
+            }
         }
         
         if (formatBlockTags[command]) {
@@ -355,6 +358,9 @@ export function initSlashCommand(appContext) {
                     break;
                 case 'code-block':
                     insertCodeBlock(); // Uses setTimeout for focus
+                    break;
+                case 'table': // NEW CASE
+                    insertTable(); // Uses setTimeout for focus internally
                     break;
                 default:
                     console.warn(`Command not implemented: ${command}`);
@@ -482,6 +488,92 @@ export function initSlashCommand(appContext) {
             }
         }, 0);
     }
+
+    // NEW FUNCTION: insertTable
+    function insertTable() {
+        const table = document.createElement('table');
+        const tbody = document.createElement('tbody');
+
+        // Default 2x2 table
+        for (let i = 0; i < 2; i++) { // 2 rows
+            const tr = document.createElement('tr');
+            for (let j = 0; j < 2; j++) { // 2 cells per row
+                const td = document.createElement('td');
+                td.innerHTML = '<br>'; // Placeholder for contenteditable behavior & min height
+                tr.appendChild(td);
+            }
+            tbody.appendChild(tr);
+        }
+        table.appendChild(tbody);
+        const tableHtml = table.outerHTML;
+
+        const sel = window.getSelection();
+        if (!sel.rangeCount) return;
+        const range = sel.getRangeAt(0);
+        const currentBlock = findCurrentBlock(range.startContainer);
+
+        if (currentBlock && (currentBlock.textContent.trim() === '' || currentBlock.innerHTML.toLowerCase() === '<br>') && !['LI', 'TD', 'TH'].includes(currentBlock.tagName) ) {
+            // Current block is empty and suitable for replacement (not inside another table cell or list item)
+            const fragment = document.createDocumentFragment();
+            
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = tableHtml;
+            const tableNode = tempDiv.firstChild; // This is the <table> element
+            fragment.appendChild(tableNode);
+
+            const pAfter = document.createElement('p');
+            pAfter.innerHTML = '<br>';
+            fragment.appendChild(pAfter);
+            
+            currentBlock.parentNode.replaceChild(fragment, currentBlock);
+            focusOnFirstCellOfTable(tableNode, sel);
+
+        } else {
+            // Not an empty block, or no suitable block found. Use insertHTML.
+            // This will insert at cursor, potentially splitting a block.
+            // A new paragraph is added after the table for easier typing continuation.
+            document.execCommand('insertHTML', false, tableHtml + '<p><br></p>');
+            
+            // Find the newly inserted table to focus on its first cell
+            setTimeout(() => {
+                // Find the table that is most likely the one just inserted.
+                // This could be tricky if other tables are present. We assume the last one.
+                const tablesInEditor = liveEditor.querySelectorAll('table');
+                if (tablesInEditor.length > 0) {
+                    const lastInsertedTable = tablesInEditor[tablesInEditor.length - 1];
+                    focusOnFirstCellOfTable(lastInsertedTable, sel);
+                }
+            }, 0); // setTimeout allows DOM to update before querying and focusing
+        }
+    }
+
+    // NEW HELPER FUNCTION: focusOnFirstCellOfTable
+    function focusOnFirstCellOfTable(tableElement, selection) {
+        if (!tableElement || tableElement.tagName !== 'TABLE') return;
+        
+        const firstCell = tableElement.querySelector('td');
+        if (firstCell) {
+            liveEditor.focus(); // Ensure the editor itself has focus
+
+            const r = document.createRange();
+            // If cell only contains <br>, clear it so typing replaces it naturally.
+            if (firstCell.innerHTML.toLowerCase() === '<br>') {
+                firstCell.innerHTML = '';
+            }
+
+            // Set range: if cell is now empty, set to cell; otherwise, to its first child.
+            if (firstCell.firstChild) {
+                r.setStart(firstCell.firstChild, 0);
+            } else {
+                r.setStart(firstCell, 0);
+            }
+            r.collapse(true); // Collapse range to the start
+            
+            selection.removeAllRanges(); // Clear any existing selection
+            selection.addRange(r); // Add new range
+        }
+    }
+
 
     liveEditor.addEventListener('input', (e) => {
         // ... (input listener logic for activating/updating slash command remains the same)
@@ -626,7 +718,7 @@ export function initSlashCommand(appContext) {
         const editorContent = liveEditor.innerHTML.trim().toLowerCase();
         const isEmptyEffectively = editorContent === '' || editorContent === '<p></p>' || editorContent === '<p><br></p>' || editorContent === '<br>' || editorContent === '<br/>';
         
-        const hasNoBlockLevelChildren = !liveEditor.querySelector('p, h1, h2, h3, div, ul, ol, blockquote, pre, li, hr');
+        const hasNoBlockLevelChildren = !liveEditor.querySelector('p, h1, h2, h3, div, ul, ol, blockquote, pre, li, hr, table'); // Added table
 
         if (isEmptyEffectively || (liveEditor.childNodes.length === 0) || (liveEditor.childNodes.length === 1 && liveEditor.firstChild.nodeName === 'BR') || (hasNoBlockLevelChildren && liveEditor.textContent.trim() !== '')) {
             if (!(liveEditor.childNodes.length === 1 && liveEditor.firstChild.nodeName === 'P' && 

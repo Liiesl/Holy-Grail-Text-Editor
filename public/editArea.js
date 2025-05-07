@@ -34,9 +34,9 @@ export function initEditArea(appContext) {
     } = appContext;
 
     const clientConverter = new showdown.Converter();
+    clientConverter.setOption('tables', true); // Enable table parsing for Showdown
 
     // --- Internal Save Logic ---
-    // Modified to accept preparedSaveData for autosaves and handle differential saving
     async function _savePageContent(isAutosave = false, preparedSaveData = null) {
         if (!appContext.currentPageState || !appContext.currentProject) {
             if (!isAutosave) showStatus('No page selected or project loaded.', 'error');
@@ -49,27 +49,27 @@ export function initEditArea(appContext) {
         const pageIdBeingSaved = appContext.currentPageState.id;
         const projectBeingSaved = appContext.currentProject;
 
-        let mode = 'full'; // 'patch' or 'full'
+        let mode = 'full'; 
         let requestBodyPayload;
-        let targetMarkdownForStateUpdate; // The full markdown content we intend to save / that results from patch
+        let targetMarkdownForStateUpdate; 
 
         if (isAutosave && preparedSaveData) {
             targetMarkdownForStateUpdate = preparedSaveData.targetMarkdown;
             if (preparedSaveData.type === 'patch' && DmpInstance && preparedSaveData.baseVersion) {
                 mode = 'patch';
                 requestBodyPayload = {
-                    patch_text: preparedSaveData.data, // patch_text
+                    patch_text: preparedSaveData.data, 
                     base_version_hash: preparedSaveData.baseVersion
                 };
-            } else { // Autosave determined full save or DmpInstance not available for patch
+            } else { 
                 mode = 'full';
-                requestBodyPayload = { markdown: preparedSaveData.data }; // full markdown
+                requestBodyPayload = { markdown: preparedSaveData.data }; 
             }
-        } else { // Manual save
+        } else { 
             const currentHtml = liveEditor.innerHTML;
             targetMarkdownForStateUpdate = htmlToMarkdown(currentHtml);
 
-            if (!appContext.hasUnsavedChanges && !preparedSaveData) { // If no precomputed data, check current changes
+            if (!appContext.hasUnsavedChanges && !preparedSaveData) { 
                 if (!isAutosave) showStatus('No changes to save.', 'info', 1500);
                  else if (isAutosave && appContext.statusMessage.textContent === 'Autosaving...') {
                     appContext.showStatus('All changes saved.', 'success', 2000);
@@ -77,7 +77,6 @@ export function initEditArea(appContext) {
                 return true;
             }
             
-            // For manual saves, if content happens to be identical now (e.g., user undid changes)
             if (!isAutosave && targetMarkdownForStateUpdate === appContext.currentPageState.originalMarkdown) {
                 console.log("_savePageContent: Manual save - content identical to last saved state. Skipping network request.");
                 appContext.hasUnsavedChanges = false;
@@ -89,7 +88,7 @@ export function initEditArea(appContext) {
             if (DmpInstance && appContext.currentPageState.versionHash && appContext.currentPageState.originalMarkdown !== null) {
                 mode = 'patch';
                 const diffs = DmpInstance.diff_main(appContext.currentPageState.originalMarkdown, targetMarkdownForStateUpdate);
-                DmpInstance.diff_cleanupSemantic(diffs); // Make patch more human-readable
+                DmpInstance.diff_cleanupSemantic(diffs); 
                 const patchList = DmpInstance.patch_make(appContext.currentPageState.originalMarkdown, diffs);
                 const patchText = DmpInstance.patch_toText(patchList);
                 requestBodyPayload = {
@@ -133,27 +132,24 @@ export function initEditArea(appContext) {
             });
 
             if (response.status === 409 && mode === 'patch') {
-                // Conflict detected during a patch save
                 if (appContext.currentPageState && appContext.currentPageState.id === pageIdBeingSaved && appContext.currentProject === projectBeingSaved) {
                     showStatus(`Save conflict: Page was modified elsewhere. Your next save will overwrite.`, 'error', 5000);
-                    appContext.currentPageState.versionHash = null; // Force next save to be full
-                    // Keep hasUnsavedChanges = true, as local changes are still not on server
+                    appContext.currentPageState.versionHash = null; 
                 } else {
                      console.warn(`Save conflict for ${projectBeingSaved}/${pageIdBeingSaved}, but page context changed.`);
                 }
-                return false; // Save failed due to conflict
+                return false; 
             }
 
             if (!response.ok)  {
                  const errData = await response.json();
                  throw new Error(errData.error || `HTTP error! status: ${response.status}`);
             }
-            const result = await response.json(); // Expect { newMarkdown, newVersionHash, newTitle, message }
+            const result = await response.json(); 
             
             if (appContext.currentPageState && appContext.currentPageState.id === pageIdBeingSaved && appContext.currentProject === projectBeingSaved) {
                 showStatus(isAutosave ? 'All changes saved.' : (result.message || 'Page saved!'), 'success', isAutosave ? 2000: 2500);
             
-                // CRITICAL: Update originalMarkdown and versionHash from server response
                 appContext.currentPageState.originalMarkdown = result.newMarkdown;
                 appContext.currentPageState.versionHash = result.newVersionHash;
 
@@ -168,7 +164,6 @@ export function initEditArea(appContext) {
                 const veryCurrentHtml = liveEditor.innerHTML;
                 const veryCurrentMarkdown = htmlToMarkdown(veryCurrentHtml);
 
-                // Compare editor content with the new canonical markdown from server
                 if (veryCurrentMarkdown === result.newMarkdown) {
                     appContext.hasUnsavedChanges = false;
                 } else {
@@ -185,9 +180,6 @@ export function initEditArea(appContext) {
             } else {
                 console.error(`Error saving page ${projectBeingSaved}/${pageIdBeingSaved} (context changed): ${error.message}`);
             }
-            // Re-evaluate hasUnsavedChanges based on current editor vs (potentially stale) originalMarkdown
-            // If save failed, versionHash should not be nullified here unless it was a conflict.
-            // The existing originalMarkdown is still the last known good state.
             const checkAfterFailHtml = liveEditor.innerHTML;
             const checkAfterFailMarkdown = htmlToMarkdown(checkAfterFailHtml);
             if (appContext.currentPageState && checkAfterFailMarkdown !== appContext.currentPageState.originalMarkdown) {
@@ -202,7 +194,7 @@ export function initEditArea(appContext) {
                 if (appContext.updateSaveButtonState) appContext.updateSaveButtonState();
                 
                 if (appContext.hasUnsavedChanges && appContext.scheduleAutosave) {
-                    appContext.scheduleAutosave(); // Reschedule if changes still exist or new ones made
+                    appContext.scheduleAutosave(); 
                 }
             }
         }
@@ -261,7 +253,7 @@ export function initEditArea(appContext) {
             const patchText = DmpInstance.patch_toText(patchList);
             preparedSaveData = {
                 type: 'patch',
-                data: patchText, // This is patch_text
+                data: patchText, 
                 baseVersion: appContext.currentPageState.versionHash,
                 targetMarkdown: newMarkdown
             };
@@ -269,7 +261,7 @@ export function initEditArea(appContext) {
             showStatus('Autosaving (full)...', 'info', 0);
             preparedSaveData = {
                 type: 'full',
-                data: newMarkdown, // This is full markdown
+                data: newMarkdown, 
                 targetMarkdown: newMarkdown
             };
         }
@@ -283,7 +275,7 @@ export function initEditArea(appContext) {
         if (appContext.currentProject) {
             currentPageDisplay.textContent = `Project: ${appContext.currentProject} - No page selected`;
         }
-        appContext.currentPageState = null; // Clears id, title, originalMarkdown, versionHash
+        appContext.currentPageState = null; 
         appContext.hasUnsavedChanges = false;
         if (appContext.autosaveTimeoutId) {
             clearTimeout(appContext.autosaveTimeoutId);
@@ -291,7 +283,7 @@ export function initEditArea(appContext) {
         }
         if (appContext.updateSaveButtonState) appContext.updateSaveButtonState();
         liveEditor.dataset.placeholder = "Type '/' for commands, or start writing...";
-        liveEditor.classList.add('is-empty'); // Ensure placeholder shows
+        liveEditor.classList.add('is-empty'); 
     };
 
     appContext.loadPageContent = async (projectName, pageId) => {
@@ -310,22 +302,22 @@ export function initEditArea(appContext) {
                  const errData = await response.json();
                  throw new Error(errData.error || `HTTP error! status: ${response.status}`);
             }
-            const data = await response.json(); // Expects { id, title, markdown, versionHash }
+            const data = await response.json(); 
             
             appContext.currentPageState = { 
                 id: data.id, 
                 originalMarkdown: data.markdown,
                 title: data.title,
-                versionHash: data.versionHash // Store the version hash
+                versionHash: data.versionHash 
             };
             liveEditor.innerHTML = clientConverter.makeHtml(data.markdown);
             
             if (liveEditor.innerHTML.trim() === '') {
                  liveEditor.classList.add('is-empty');
-                 liveEditor.dispatchEvent(new Event('focus')); // Re-trigger focus to ensure placeholder logic if it was just cleared
+                 liveEditor.dispatchEvent(new Event('focus')); 
             } else {
                  liveEditor.classList.remove('is-empty');
-                 liveEditor.removeAttribute('data-placeholder'); // Though CSS handles placeholder via ::before
+                 liveEditor.removeAttribute('data-placeholder'); 
             }
 
             currentPageDisplay.textContent = `${projectName} / ${data.title || data.id}`;
@@ -350,30 +342,29 @@ export function initEditArea(appContext) {
         }
     };
 
-    appContext.savePage = async () => { // Manual save
-        await _savePageContent(false, null); // false for isAutosave, null for preparedSaveData
+    appContext.savePage = async () => { 
+        await _savePageContent(false, null); 
     };
 
     // --- Event Listeners ---
     liveEditor.addEventListener('input', (e) => {
-        if (appContext.currentPageState) { // Ensure a page is loaded
+        if (appContext.currentPageState) { 
             const currentEditorMarkdown = htmlToMarkdown(liveEditor.innerHTML);
-            // Check against the definitive originalMarkdown
             if (currentEditorMarkdown !== appContext.currentPageState.originalMarkdown) {
                 if (!appContext.hasUnsavedChanges) {
                     appContext.hasUnsavedChanges = true;
                     if (appContext.updateSaveButtonState) appContext.updateSaveButtonState();
                 }
-            } else { // Content matches original
+            } else { 
                 if (appContext.hasUnsavedChanges) {
                     appContext.hasUnsavedChanges = false;
                     if (appContext.updateSaveButtonState) appContext.updateSaveButtonState();
                 }
             }
             
-            if (appContext.hasUnsavedChanges) { // Schedule autosave only if there are actual unsaved changes
+            if (appContext.hasUnsavedChanges) { 
                if (appContext.scheduleAutosave) appContext.scheduleAutosave();
-            } else { // If changes were undone to match original, clear any pending autosave
+            } else { 
                 if (appContext.autosaveTimeoutId) {
                     clearTimeout(appContext.autosaveTimeoutId);
                     appContext.autosaveTimeoutId = null; 
@@ -381,8 +372,7 @@ export function initEditArea(appContext) {
             }
         }
 
-        // Placeholder visibility logic based on content
-        if (liveEditor.innerHTML.trim() === '' || liveEditor.innerHTML === '<p><br></p>') { // Consider a single empty paragraph with a <br> as empty for placeholder
+        if (liveEditor.innerHTML.trim() === '' || liveEditor.innerHTML === '<p><br></p>') { 
             if (!liveEditor.classList.contains('is-empty')) {
                  liveEditor.classList.add('is-empty');
             }
@@ -443,19 +433,14 @@ export function initEditArea(appContext) {
         if (e.key === 'Enter' && !e.shiftKey) { 
             e.preventDefault(); 
             
-            // Ensure consistent paragraph separation behavior
-            // Some browsers default to <div>, setting to <p> is more common for rich text.
             document.execCommand('defaultParagraphSeparator', false, 'p');
             document.execCommand('insertParagraph', false);
             
-            // Dispatch input to trigger change detection, autosave scheduling, and placeholder update
             liveEditor.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
         }
     });
 
-    // Initial placeholder setup and dynamic updates
     liveEditor.addEventListener('focus', () => {
-        // Redundant with input event but good for initial focus on empty editor
         if (liveEditor.innerHTML.trim() === '' || liveEditor.innerHTML === '<p><br></p>') {
             liveEditor.classList.add('is-empty');
         } else {
@@ -463,18 +448,17 @@ export function initEditArea(appContext) {
         }
     });
     liveEditor.addEventListener('blur', () => {
-        // On blur, if it's empty, ensure the class is set.
-        // No need to remove 'is-empty' on blur if content exists, input handler does that.
         if (liveEditor.innerHTML.trim() === '' || liveEditor.innerHTML === '<p><br></p>') {
             liveEditor.classList.add('is-empty');
         }
     });
 
-    // Set initial state for placeholder
     if (liveEditor.innerHTML.trim() === '' || liveEditor.innerHTML === '<p><br></p>') {
         liveEditor.classList.add('is-empty');
     } else {
         liveEditor.classList.remove('is-empty');
     }
     liveEditor.dataset.placeholder = "Type '/' for commands, or start writing...";
+    
+    // REMOVED: Context Menu for Tables listener. Table interactions are now handled by tableEditor.js via hover/focus.
 }

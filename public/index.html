@@ -7,7 +7,7 @@
    <link rel="stylesheet" href="style.css">
    <link rel="stylesheet" href="slashCommand.css">
    <link rel="stylesheet" href="sidebar.css">
-   <link rel="stylesheet" href="textStyleModal.css"> <!-- ADDED THIS LINE -->
+   <link rel="stylesheet" href="textStyleModal.css">
    <script src="https://cdnjs.cloudflare.com/ajax/libs/turndown/7.0.0/turndown.js"></script>
    <script src="https://cdnjs.cloudflare.com/ajax/libs/showdown/2.1.0/showdown.min.js"></script>
    <script src="https://cdnjs.cloudflare.com/ajax/libs/diff_match_patch/20121119/diff_match_patch.js"></script>
@@ -69,20 +69,15 @@
        </div>
    </div>
 
-   <!-- Text Styling Modal - ADDED THIS BLOCK -->
+   <!-- Text Styling Modal -->
    <div id="text-style-modal" class="text-style-modal" style="display:none;">
-       <!-- REMOVED THE SELECT ELEMENT FOR formatBlock -->
        <button data-command="bold" title="Bold (Ctrl+B)"><i class="fas fa-bold"></i></button>
        <button data-command="italic" title="Italic (Ctrl+I)"><i class="fas fa-italic"></i></button>
        <button data-command="underline" title="Underline (Ctrl+U)"><i class="fas fa-underline"></i></button>
        <button data-command="strikeThrough" title="Strikethrough"><i class="fas fa-strikethrough"></i></button>
        <button data-command="createLink" title="Create/Edit Link"><i class="fas fa-link"></i></button>
-       <!-- <button data-command="insertUnorderedList" title="Bullet List"><i class="fas fa-list-ul"></i></button> -->
-       <!-- <button data-command="insertOrderedList" title="Numbered List"><i class="fas fa-list-ol"></i></button> -->
    </div>
-   <!-- End of Text Styling Modal -->
-
-
+   
    <script type="module" src="main.js"></script>
 </body>
 </html>

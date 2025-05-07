@@ -3,7 +3,8 @@
 import { initSidePanel } from './sidePanel.js';
 import { initEditArea } from './editArea.js';
 import { initSlashCommand } from './slashCommand.js';
-import { initTextStyleModal } from './textStyleModal.js'; // ADDED THIS LINE
+import { initTextStyleModal } from './textStyleModal.js'; 
+import { initTableEditor } from './tableEditor.js'; 
 
 // Make sure TurndownService is available globally (e.g., via <script> tag in index.html)
 // If using a module bundler, you would import it:
@@ -29,7 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
        statusMessage: document.getElementById('status-message'),
        slashCommandModal: document.getElementById('slash-command-modal'),
        actionsModal: document.getElementById('actions-modal'), 
-       textStyleModal: document.getElementById('text-style-modal'), // ADDED THIS LINE
+       textStyleModal: document.getElementById('text-style-modal'),
 
 
        // Core functions
@@ -91,14 +92,8 @@ document.addEventListener('DOMContentLoaded', () => {
             strongDelimiter: '**',
             linkStyle: 'inlined',
             br: '  \n', // General rule for <br> within text lines
-
-            // blankReplacement is for elements that are "blank" but not necessarily <p> or <p><br>.
-            // We'll rely on specific rules for <p> and <p><br> instead.
-            // Default: (content, node) => node.isBlock ? '\n\n' : ''
         });
         
-        // Rule 1: Handle <p><br></p> - a paragraph containing only a <br>
-        // This is a common way rich text editors represent an empty line.
         turndownServiceInstance.addRule('pWithOnlyBrToHTML', {
             filter: function (node) {
                 return node.nodeName === 'P' &&
@@ -106,28 +101,19 @@ document.addEventListener('DOMContentLoaded', () => {
                        node.firstChild.nodeName === 'BR';
             },
             replacement: function (content, node) {
-                // Output the literal HTML string <p><br></p>
-                // The \n\n ensures it's treated as a block in the "Markdown" file.
                 return '<p><br></p>\n\n';
             }
         });
 
-        // Rule 2: Handle <p></p> - a completely empty paragraph
         turndownServiceInstance.addRule('emptyPToHTMLPWithBr', {
             filter: function (node) {
-                // Ensure it's a P node and its innerHTML (trimmed) is empty.
-                // This avoids matching <p> tags that contain only whitespace text nodes.
-                // It also correctly doesn't match <p><br></p> because innerHTML would be "<br>".
                 return node.nodeName === 'P' && node.innerHTML.trim() === '';
             },
             replacement: function (content, node) {
-                // Also convert this to the literal HTML string <p><br></p>
                 return '<p><br></p>\n\n';
             }
         });
 
-
-        // --- Add GFM (GitHub Flavored Markdown)-like features ---
         turndownServiceInstance.addRule('strikethrough', {
             filter: ['del', 's', 'strike'],
             replacement: function (content) {
@@ -166,6 +152,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
+        turndownServiceInstance.keep(['table', 'thead', 'tbody', 'tr', 'th', 'td', 'caption']);
+
 
         appContext.htmlToMarkdown = (htmlString) => {
             if (!turndownServiceInstance) { 
@@ -173,25 +161,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 return htmlString; 
             }
             try {
-                // Pre-processing: Clean up non-breaking spaces.
                 let cleanedHtml = htmlString.replace(/\u00A0/g, ' ');
-
-                // Convert HTML to "Markdown" (which may now include <p><br></p>)
                 let markdown = turndownServiceInstance.turndown(cleanedHtml);
-                
-                // Post-processing: Normalize multiple blank newlines *between blocks*.
-                // This should not affect the content of the <p><br></p> tags themselves.
-                // Example: `BlockA\n\n\n\n<p><br></p>\n\nBlockB` becomes `BlockA\n\n<p><br></p>\n\nBlockB`
                 markdown = markdown.replace(/\n{3,}/g, '\n\n');
-                
-                // Trim leading/trailing whitespace from the entire document.
                 markdown = markdown.trim();
-
-                // Ensure a final newline character.
                 if (markdown) {
                     markdown += '\n';
                 }
-                
                 return markdown;
             } catch (error) {
                 console.error("Error during HTML to Markdown conversion with Turndown:", error);
@@ -203,7 +179,6 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
         console.error("TurndownService library not found. Markdown conversion will be unreliable. Please include turndown.js in your HTML.");
         appContext.htmlToMarkdown = (htmlString) => {
-            // Fallback basic converter (unchanged, less relevant if Turndown is present)
             console.warn("Using basic fallback HTML-to-Markdown converter because Turndown library is missing.");
             const tempDiv = document.createElement('div');
             let processedHtml = htmlString
@@ -228,7 +203,8 @@ document.addEventListener('DOMContentLoaded', () => {
    initEditArea(appContext); 
    initSidePanel(appContext); 
    initSlashCommand(appContext);
-   initTextStyleModal(appContext); // ADDED THIS LINE
+   initTextStyleModal(appContext); 
+   initTableEditor(appContext); 
 
 
    // --- Global Event Listeners ---
@@ -249,10 +225,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 appContext.slashCommandModal.style.display = 'none';
                  if (appContext.liveEditor) appContext.liveEditor.focus();
             }
-            // ADDED: Hide text style modal on Escape as well
             if (appContext.textStyleModal && appContext.textStyleModal.style.display !== 'none') {
                 appContext.textStyleModal.style.display = 'none';
             }
+            // Note: Table toolbar Escape handling is within tableEditor.js
         }
     });
 
