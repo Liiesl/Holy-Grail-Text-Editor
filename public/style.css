@@ -377,7 +377,7 @@ body {
 }
 
 .table-control-add-line .add-line-icon { /* The plus icon span */
-    font-size: 14px; /* Size of the '+' icon character */
+    font-size: 7px; /* Size of the '+' icon character */
     color: inherit; /* Icon color is inherited from .table-control-add-line */
     background-color: transparent; /* No background for the icon wrapper itself */
     border: none; /* No border for the icon wrapper itself */

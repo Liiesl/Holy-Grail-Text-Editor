@@ -340,7 +340,6 @@ export function initTableEditor(appContext) {
 
         const tableRect = hoverContext.table.getBoundingClientRect();
         const sensitivity = 10; // pixels for edge detection
-        const lineButtonOffset = 5; // Half of line button dimension (20px / 2)
 
         // Table Edges for Add Lines
         if (e.clientY < tableRect.top + sensitivity) hoverContext.isOverTableTopEdge = true;
@@ -379,7 +378,7 @@ export function initTableEditor(appContext) {
             const tableRect = activeTable.getBoundingClientRect();
             const scrollX = window.pageXOffset;
             const scrollY = window.pageYOffset;
-            const lineBtnDim = 20; // dimension of the add line button's hover area
+            const lineBtnDim = 10; // dimension of the add line button's hover area
             const menuBtnSize = 24;
             const margin = 5;
 

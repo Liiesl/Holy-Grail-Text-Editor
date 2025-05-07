@@ -2,9 +2,10 @@
 
 import { initSidePanel } from './sidePanel.js';
 import { initEditArea } from './editArea.js';
-import { initSlashCommand } from './slashCommand.js';
-import { initTextStyleModal } from './textStyleModal.js'; 
-import { initTableEditor } from './tableEditor.js'; 
+import { initSlashCommand } from './SCMD/slashCommand.js';
+import { initTextStyleModal } from './textStyleModal.js';
+import { initTableEditor } from './tableEditor.js';
+import { initEmbedPageModal } from './SCMD/embedPageModal.js'; // Added
 
 // Make sure TurndownService is available globally (e.g., via <script> tag in index.html)
 // If using a module bundler, you would import it:
@@ -18,6 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
        currentPageState: null, // { id, title, originalMarkdown, versionHash }
        hasUnsavedChanges: false,
        slashCommandInfo: null,
+       isSlashCommandActive: false, // Ensure this is here and used by slashCommand.js
        autosaveTimeoutId: null,
        autosaveDelay: 3000,
        isSaving: false,
@@ -29,24 +31,31 @@ document.addEventListener('DOMContentLoaded', () => {
        currentPageDisplay: document.getElementById('current-page-display'),
        statusMessage: document.getElementById('status-message'),
        slashCommandModal: document.getElementById('slash-command-modal'),
-       actionsModal: document.getElementById('actions-modal'), 
+       actionsModal: document.getElementById('actions-modal'),
        textStyleModal: document.getElementById('text-style-modal'),
+       embedPageModal: null, // Will be populated by initEmbedPageModal
+       embedPageTreeContainer: null, // Will be populated by initEmbedPageModal
 
 
        // Core functions
        showStatus: null,
        updateSaveButtonState: null,
-       clearEditor: null, 
+       clearEditor: null,
        loadPageContent: null,
        savePage: null,
        scheduleAutosave: null,
        performAutosave: null,
        fetchProjects: null,
        fetchPageTree: null,
-       createNewSubpage: null, 
-       createNewProject: null, 
+       // createNewSubpageInSidebar: null, // This is the one from sidePanel.js for UI interaction
+       createNewProject: null,
        htmlToMarkdown: null,
        openActionsModal: null,
+       openEmbedPageModal: null, // To be defined by initEmbedPageModal
+       closeEmbedPageModal: null, // To be defined by initEmbedPageModal
+       removeSlashCommandTextFromEditor: null, // To be defined by slashCommand.js
+       closeSlashCommandModal: null, // To be defined by slashCommand.js
+
 
        // Action handlers (defined in sidePanel.js and attached to appContext)
        deleteProject: null,
@@ -200,11 +209,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
    // Initialize modules
-   initEditArea(appContext); 
-   initSidePanel(appContext); 
-   initSlashCommand(appContext);
-   initTextStyleModal(appContext); 
-   initTableEditor(appContext); 
+   initEditArea(appContext);
+   initSidePanel(appContext); // Defines createNewProject, fetchProjects, fetchPageTree, action handlers, etc.
+   initSlashCommand(appContext); // Uses appContext.createNewSubpage, and its commands (like embedPageCommand) will use appContext.openEmbedPageModal
+   initTextStyleModal(appContext);
+   initTableEditor(appContext);
+   initEmbedPageModal(appContext); // Defines appContext.openEmbedPageModal, appContext.closeEmbedPageModal, and populates appContext.embedPageModal
 
 
    // --- Global Event Listeners ---
@@ -221,9 +231,20 @@ document.addEventListener('DOMContentLoaded', () => {
             if (appContext.actionsModal && appContext.actionsModal.style.display !== 'none') {
                 appContext.actionsModal.style.display = 'none';
             }
-            if (appContext.slashCommandModal && appContext.slashCommandModal.style.display !== 'none') {
-                appContext.slashCommandModal.style.display = 'none';
-                 if (appContext.liveEditor) appContext.liveEditor.focus();
+            // Slash command handles its own Escape, but if embedPageModal is active due to it,
+            // this global escape might try to close embedPageModal.
+            // Let embedPageModal's Escape handling (if any, or via slash command) take precedence if it's more specific.
+            if (appContext.embedPageModal && appContext.embedPageModal.style.display !== 'none') { 
+                // If slash command is also active, let slash command's Escape handler deal with embedPageModal if it opened it.
+                // Otherwise, close embedPageModal directly.
+                if (!appContext.isSlashCommandActive && appContext.closeEmbedPageModal) {
+                     appContext.closeEmbedPageModal();
+                }
+                // If slash command *is* active, its own keydown handler for Escape will run and should close both.
+            }
+            if (appContext.isSlashCommandActive && appContext.slashCommandModal && appContext.slashCommandModal.style.display !== 'none') {
+                // slashCommand.js handles its own Escape key logic to close modal and reset state.
+                // This might include closing an associated embedPageModal.
             }
             if (appContext.textStyleModal && appContext.textStyleModal.style.display !== 'none') {
                 appContext.textStyleModal.style.display = 'none';
@@ -242,7 +263,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
    // --- Initialization ---
    if (appContext.fetchProjects) {
-       appContext.fetchProjects();
+       appContext.fetchProjects(); // From sidePanel.js
    } else {
        console.error("fetchProjects function not initialized on appContext by sidePanel.js");
    }

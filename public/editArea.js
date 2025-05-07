@@ -431,6 +431,11 @@ export function initEditArea(appContext) {
 
     liveEditor.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) { 
+            // If slash command modal is active, let it handle the Enter key.
+            if (appContext.isSlashCommandActive) {
+                return;
+            }
+            
             e.preventDefault(); 
             
             document.execCommand('defaultParagraphSeparator', false, 'p');

@@ -1,0 +1,237 @@
+/* embedPageModal.css */
+
+/* Styles for the dynamically created modal to mimic slashCommand.css */
+#embed-page-modal-dynamic {
+    position: fixed; /* Crucial for JS positioning */
+    z-index: 1001;      /* Keep on top, slightly above slash command (1000) if they overlap */
+    background-color: var(--bg-tertiary);
+    border: 1px solid var(--border-color-primary);
+    border-radius: var(--border-radius);
+    box-shadow: var(--medium-shadow);
+    padding: 8px; /* Consistent with slash command */
+    min-width: 280px; /* Consistent with slash command */
+    max-width: 380px; /* Consistent with slash command */
+    max-height: 380px; /* Consistent with slash command */
+    font-size: 0.9rem; /* Base font size for modal items */
+    animation: fadeInEmbed 0.15s ease-out; /* Subtle animation */
+
+    /* For flex layout of header and body */
+    display: flex;
+    flex-direction: column;
+}
+
+@keyframes fadeInEmbed {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Modal Header */
+.embed-modal-header-dynamic {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 8px; /* Space before border */
+    margin-bottom: 8px; /* Space after border, before body */
+    border-bottom: 1px solid var(--border-color-secondary); /* Softer border for header */
+    flex-shrink: 0; /* Header should not shrink */
+}
+
+.embed-modal-title-dynamic {
+    margin: 0;
+    font-size: 0.95rem; /* Slightly larger than item text */
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.embed-modal-close-button-dynamic {
+    font-size: 1.4rem; /* Larger click target */
+    font-weight: normal;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 0 3px; /* Small padding for easier clicking */
+    line-height: 1; /* Prevent extra height */
+    transition: color 0.15s ease;
+}
+.embed-modal-close-button-dynamic:hover {
+    color: var(--text-primary);
+}
+
+/* Modal Body - contains the tree */
+.embed-modal-body-dynamic {
+    flex-grow: 1; /* Body takes remaining space */
+    overflow-y: auto; /* Scroll for tree content if it overflows */
+    margin: 0 -4px -4px -4px; /* Adjust to use full space if modal has padding, and allow scrollbar to be at edge */
+    padding: 0 4px 4px 4px; /* Restore padding for content within body */
+    display: flex; /* Allow filter input and tree container to be flex items */
+    flex-direction: column; /* Stack filter input above tree container */
+}
+
+/* Filter Input */
+#embed-page-filter-input-dynamic {
+    width: calc(100% - 0px); /* Full width of parent (.embed-modal-body-dynamic after its padding restored) */
+    padding: 7px 10px;
+    margin-bottom: 8px; /* Space before tree */
+    border: 1px solid var(--border-color-secondary);
+    border-radius: var(--border-radius-small);
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 0.85rem;
+    box-sizing: border-box; /* Include padding and border in the element's total width and height */
+    flex-shrink: 0; /* Prevent filter input from shrinking */
+}
+#embed-page-filter-input-dynamic:focus {
+    outline: none;
+    border-color: var(--accent-primary-faded);
+    box-shadow: 0 0 0 2px var(--accent-primary-alpha);
+}
+
+/* Tree Container within body (needs to allow scroll if content overflows) */
+#embed-page-tree-container-dynamic {
+    flex-grow: 1; /* Tree container takes remaining space */
+    overflow-y: auto; /* Scroll for tree content if it overflows */
+    /* Adjust negative margins to pull scrollbar to edge of parent's padding, if body also has padding */
+    margin: 0 -4px -4px -4px; /* If embed-modal-body has padding: 0 4px 4px 4px; this pulls scrollbar out */
+    padding: 0 4px 4px 4px; /* Then restore padding for the tree itself */
+}
+
+
+/* Common messages */
+#embed-page-modal-dynamic .embed-loading-message, /* More specific */
+#embed-page-modal-dynamic .embed-no-results-message,
+#embed-page-modal-dynamic .embed-error-message,
+#embed-page-modal-dynamic .embed-no-filter-results { /* Class for filter message */
+    padding: 8px 10px;
+    color: var(--text-secondary);
+    text-align: left; /* Match sidebar message alignment if they are list items */
+    font-style: italic;
+    font-size: 0.85rem;
+    list-style: none; /* Ensure no bullets if added as LI */
+    /* If added as P, this is fine */
+}
+#embed-page-modal-dynamic .embed-error-message {
+    color: var(--text-error);
+    font-style: normal;
+}
+
+/* Base UL styling for tree container and nested lists */
+#embed-page-tree-container-dynamic ul,
+#embed-page-modal-dynamic .project-list,
+#embed-page-modal-dynamic .project-pages-container ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+/* Styling for the single project item LI wrapper */
+#embed-page-modal-dynamic .project-list > .project-item {
+    margin-bottom: 3px; /* Similar to sidebar.css .project-item */
+}
+
+/* Styling for the single project header displayed in the modal (mimics sidebar.css .project-header) */
+#embed-page-modal-dynamic .project-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px; /* Top/bottom padding like sidebar, could be less if space is tight */
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: 5px; /* Space before the page list */
+    /* border-bottom: 1px solid var(--border-color-secondary); Optional: if more separation is needed */
+}
+
+#embed-page-modal-dynamic .project-header .fas { /* Project type icon (fa-book) */
+    color: var(--text-secondary);
+    font-size: 0.9em;
+    width: 16px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+#embed-page-modal-dynamic .project-header .project-name-text {
+    flex-grow: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--text-primary); 
+    font-weight: 600; /* Make project name slightly more prominent */
+}
+
+/* ULs for page lists - direct children and nested (mimics sidebar.css) */
+#embed-page-modal-dynamic .project-pages-container > ul { /* First level of pages */
+    padding-left: 15px; 
+}
+#embed-page-modal-dynamic .project-pages-container ul ul { /* Nested pages */
+    padding-left: 15px; 
+}
+
+/* Individual Page Item (LI) (mimics sidebar.css .project-pages-container li) */
+#embed-page-modal-dynamic .project-pages-container li.page {
+    margin-bottom: 2px;
+}
+
+/* Content wrapper for a page item - this is the clickable part (mimics sidebar.css .page-item-content) */
+#embed-page-modal-dynamic .project-pages-container .page-item-content {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 8px; /* Slightly less horizontal padding than sidebar for density */
+    cursor: pointer;
+    border-radius: var(--border-radius);
+    transition: background-color 0.15s ease, color 0.15s ease;
+    color: var(--text-primary);
+}
+
+/* Hover state for page items (mimics slash command selection) */
+#embed-page-modal-dynamic .project-pages-container .page-item-content:hover {
+    background-color: var(--accent-primary);
+    color: white; 
+}
+#embed-page-modal-dynamic .project-pages-container .page-item-content:hover .fas,
+#embed-page-modal-dynamic .project-pages-container .page-item-content:hover .page-title-text {
+    color: white;
+}
+
+#embed-page-modal-dynamic .project-pages-container .page-item-content .fas { /* Page icon */
+    color: var(--text-secondary);
+    font-size: 0.9em;
+    width: 16px; /* Icon container width */
+    height: 20px; /* Icon container height to match old .embed-item-icon */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+#embed-page-modal-dynamic .project-pages-container .page-item-content .page-title-text {
+    flex-grow: 1;
+    min-width: 0;
+    font-weight: 500; /* From old .embed-item-name-text */
+    line-height: 1.3; /* From old .embed-item-name-text */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+
+/* Scrollbar styling for the modal body AND tree container (if they scroll) */
+.embed-modal-body-dynamic::-webkit-scrollbar,
+#embed-page-tree-container-dynamic::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+.embed-modal-body-dynamic::-webkit-scrollbar-thumb,
+#embed-page-tree-container-dynamic::-webkit-scrollbar-thumb {
+    background-color: var(--border-color-secondary);
+    border-radius: 3px;
+}
+.embed-modal-body-dynamic::-webkit-scrollbar-track,
+#embed-page-tree-container-dynamic::-webkit-scrollbar-track {
+    background: transparent;
+}
+/* For Firefox */
+.embed-modal-body-dynamic,
+#embed-page-tree-container-dynamic {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-color-secondary) transparent;
+}
