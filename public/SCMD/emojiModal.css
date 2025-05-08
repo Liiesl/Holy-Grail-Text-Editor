@@ -1,0 +1,170 @@
+/* SCMD/emojiModal.css */
+
+#emoji-modal-dynamic {
+    position: fixed;
+    z-index: 1001;
+    background-color: var(--bg-tertiary);
+    border: 1px solid var(--border-color-primary);
+    border-radius: var(--border-radius);
+    box-shadow: var(--medium-shadow);
+    padding: 8px;
+    width: 320px; /* Fixed width, or min/max */
+    max-height: 400px; /* Max height before scroll */
+    font-size: 0.9rem;
+    animation: fadeInEmojiModal 0.15s ease-out;
+    display: flex; /* Changed from 'none' in JS, so flex applies */
+    flex-direction: column;
+    overflow: hidden; /* ADDED: Crucial to contain children within max-height and enable proper scroll */
+}
+
+@keyframes fadeInEmojiModal {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Modal Header */
+.emoji-modal-header-dynamic {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 8px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid var(--border-color-secondary);
+    flex-shrink: 0; /* Prevent header from shrinking */
+}
+
+.emoji-modal-title-dynamic {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.emoji-modal-close-button-dynamic {
+    font-size: 1.4rem;
+    font-weight: normal;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 0 3px;
+    line-height: 1;
+    transition: color 0.15s ease;
+}
+.emoji-modal-close-button-dynamic:hover {
+    color: var(--text-primary);
+}
+
+/* Modal Body */
+.emoji-modal-body-dynamic {
+    flex-grow: 1; /* Allow body to take remaining vertical space */
+    overflow: hidden; /* Clipping for its children, list should handle its own scroll */
+    margin: 0 -4px -4px -4px; /* Adjusts for parent padding if needed */
+    padding: 0 4px 4px 4px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0; /* Crucial for nested flex item to shrink correctly */
+}
+
+/* Filter Input */
+#emoji-filter-input-dynamic {
+    width: 100%;
+    padding: 7px 10px;
+    margin-bottom: 8px;
+    border: 1px solid var(--border-color-secondary);
+    border-radius: var(--border-radius-small);
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 0.85rem;
+    box-sizing: border-box;
+    flex-shrink: 0; /* Prevent filter input from shrinking */
+}
+#emoji-filter-input-dynamic:focus {
+    outline: none;
+    border-color: var(--accent-primary-faded);
+    box-shadow: 0 0 0 2px var(--accent-primary-alpha);
+}
+
+/* Emoji List Container */
+#emoji-list-container-dynamic {
+    flex-grow: 1; /* Allow list to take remaining space in body */
+    overflow-y: auto; /* Enable vertical scrolling for the list */
+    /* list-style: none; /* Removed as items are now grid cells, not traditional list items */
+    margin: 0; 
+    padding: 4px 2px; /* MODIFIED: Small padding around the grid */
+    min-height: 0; /* Crucial for flex item with overflow to scroll correctly */
+
+    /* ADDED/MODIFIED: Grid layout */
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(36px, 1fr)); /* Emoji cell size: min 36px width */
+    gap: 2px; /* Spacing between emoji cells */
+}
+
+/* Individual Emoji Item */
+#emoji-list-container-dynamic .emoji-item {
+    display: flex;
+    align-items: center;
+    justify-content: center; /* ADDED: Center emoji char in the cell */
+    padding: 5px; /* MODIFIED: Adjusted padding for smaller cells */
+    cursor: pointer;
+    border-radius: var(--border-radius-small);
+    transition: background-color 0.1s ease;
+    /* margin-bottom: 1px; REMOVED: Grid gap handles spacing */
+    min-height: 30px; /* ADDED: ensure cells have a minimum interactive size and consistent height */
+}
+
+#emoji-list-container-dynamic .emoji-item:hover {
+    background-color: var(--accent-primary-faded);
+}
+
+#emoji-list-container-dynamic .emoji-item .emoji-char {
+    font-size: 1.4rem; /* MODIFIED: Adjusted for better visibility in grid, less dependent on parent ems */
+    /* margin-right: 10px; REMOVED */
+    /* width: 20px; REMOVED */
+    text-align: center; /* Retained, good for centering */
+}
+
+#emoji-list-container-dynamic .emoji-item .emoji-name {
+    display: none; /* MODIFIED: Hidden as per request */
+    /* Other styles for name (font-size, color, etc.) are now visually irrelevant */
+}
+/* 
+#emoji-list-container-dynamic .emoji-item:hover .emoji-name { REMOVED: Name is hidden
+    color: var(--text-primary);
+}
+*/
+
+
+/* Messages (Loading, Error, No Results) */
+/* Ensure messages span the grid and are centered */
+#emoji-list-container-dynamic .emoji-message,
+#emoji-modal-dynamic .emoji-message { /* This selector might be broad but JS adds .emoji-message to all relevant P tags */
+    padding: 20px 10px; /* MODIFIED: Adjusted padding for messages in a grid context */
+    color: var(--text-secondary);
+    text-align: center;
+    font-style: italic;
+    font-size: 0.85rem;
+    grid-column: 1 / -1; /* ADDED: Make message span all grid columns */
+}
+
+#emoji-list-container-dynamic .emoji-error-message,
+#emoji-modal-dynamic .emoji-error-message {
+    color: var(--text-error);
+    font-style: normal;
+    /* grid-column: 1 / -1; Will be covered if it also has .emoji-message class, which it does based on JS */
+}
+
+
+/* Scrollbar styling for the emoji list */
+#emoji-list-container-dynamic::-webkit-scrollbar {
+    width: 6px;
+}
+#emoji-list-container-dynamic::-webkit-scrollbar-thumb {
+    background-color: var(--border-color-secondary);
+    border-radius: 3px;
+}
+#emoji-list-container-dynamic::-webkit-scrollbar-track {
+    background: transparent;
+}
+#emoji-list-container-dynamic {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-color-secondary) transparent;
+}

@@ -732,7 +732,7 @@ async function initializeNewProject(projectPath, projectName) { // Used for user
 }
 
 
-app.listen(port, async () => {
+app.listen(port, '0.0.0.0', async () => {
     console.log(`Server listening at http://localhost:${port}`);
     console.log(`Projects directory: ${PROJECTS_DIR}`);
     console.log(`Public directory: ${PUBLIC_DIR}`);

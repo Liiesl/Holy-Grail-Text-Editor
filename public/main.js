@@ -5,6 +5,7 @@ import { initEditArea } from './editArea.js';
 import { initSlashCommand } from './SCMD/slashCommand.js';
 import { initTextStyleModal } from './textStyleModal.js';
 import { initTableEditor } from './tableEditor.js';
+import { initEmojiModal } from './SCMD/emojiModal.js'; // Added for Emoji
 import { initEmbedPageModal } from './SCMD/embedPageModal.js'; // Added
 
 // Make sure TurndownService is available globally (e.g., via <script> tag in index.html)
@@ -33,6 +34,8 @@ document.addEventListener('DOMContentLoaded', () => {
        slashCommandModal: document.getElementById('slash-command-modal'),
        actionsModal: document.getElementById('actions-modal'),
        textStyleModal: document.getElementById('text-style-modal'),
+       emojiModal: null, // Will be populated by initEmojiModal
+       emojiListContainer: null, // Will be populated by initEmojiModal
        embedPageModal: null, // Will be populated by initEmbedPageModal
        embedPageTreeContainer: null, // Will be populated by initEmbedPageModal
 
@@ -52,6 +55,8 @@ document.addEventListener('DOMContentLoaded', () => {
        htmlToMarkdown: null,
        openActionsModal: null,
        openEmbedPageModal: null, // To be defined by initEmbedPageModal
+       openEmojiModal: null, // To be defined by initEmojiModal
+       closeEmojiModal: null, // To be defined by initEmojiModal
        closeEmbedPageModal: null, // To be defined by initEmbedPageModal
        removeSlashCommandTextFromEditor: null, // To be defined by slashCommand.js
        closeSlashCommandModal: null, // To be defined by slashCommand.js
@@ -214,6 +219,7 @@ document.addEventListener('DOMContentLoaded', () => {
    initSlashCommand(appContext); // Uses appContext.createNewSubpage, and its commands (like embedPageCommand) will use appContext.openEmbedPageModal
    initTextStyleModal(appContext);
    initTableEditor(appContext);
+   initEmojiModal(appContext); // Defines appContext.openEmojiModal, appContext.closeEmojiModal, and populates appContext.emojiListContainer
    initEmbedPageModal(appContext); // Defines appContext.openEmbedPageModal, appContext.closeEmbedPageModal, and populates appContext.embedPageModal
 
 
@@ -241,6 +247,12 @@ document.addEventListener('DOMContentLoaded', () => {
                      appContext.closeEmbedPageModal();
                 }
                 // If slash command *is* active, its own keydown handler for Escape will run and should close both.
+            }
+            if (appContext.emojiModal && appContext.emojiModal.style.display !== 'none') {
+                if (!appContext.isSlashCommandActive && appContext.closeEmojiModal) {
+                    appContext.closeEmojiModal();
+                }
+                // If slash command is active, its Escape handler should manage associated modals.
             }
             if (appContext.isSlashCommandActive && appContext.slashCommandModal && appContext.slashCommandModal.style.display !== 'none') {
                 // slashCommand.js handles its own Escape key logic to close modal and reset state.

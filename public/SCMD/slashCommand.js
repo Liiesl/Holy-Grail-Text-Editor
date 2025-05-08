@@ -3,6 +3,7 @@
 import { paragraphCommand, h1Command, h2Command, h3Command, blockquoteCommand } from './commands/basicBlockCommands.js';
 import { bulletListCommand, numberedListCommand, checklistCommand } from './commands/listCommands.js';
 import { dividerCommand, codeBlockCommand, tableCommand } from './commands/mediaCommands.js';
+import { emojiCommand } from './commands/emojiCommand.js'; // Import emojiCommand
 import { createSubpageCommand, embedPageCommand } from './commands/pageOperationCommands.js';
 
 
@@ -40,7 +41,7 @@ export function initSlashCommand(appContext) {
     // Register all imported commands
     [
         paragraphCommand, h1Command, h2Command, h3Command, blockquoteCommand,
-        bulletListCommand, numberedListCommand, checklistCommand,
+        bulletListCommand, numberedListCommand, checklistCommand, emojiCommand, // Register emojiCommand
         dividerCommand, codeBlockCommand, tableCommand,
         createSubpageCommand, embedPageCommand // embedPageCommand is registered here
     ].forEach(registerCommand);
@@ -279,7 +280,7 @@ export function initSlashCommand(appContext) {
 
         // For commands like 'embed-page', cleanup is deferred.
         // For others, it happens before execution.
-        const isDeferredCleanupCommand = commandToExecute.command === 'embed-page';
+        const isDeferredCleanupCommand = ['embed-page', 'emoji'].includes(commandToExecute.command);
 
         if (!isDeferredCleanupCommand) {
             if (appContext.slashCommandInfo) {
@@ -392,6 +393,10 @@ export function initSlashCommand(appContext) {
                    // Otherwise, this is an unexpected state, maybe close it.
                    // This path is tricky, usually embedPage would control its own closure.
                 }
+                // Similar check for emojiModal
+                if (appContext.emojiModal && appContext.emojiModal.style.display !== 'none' && appContext.closeEmojiModal) {
+                    // Similar logic as embedPageModal applies
+                }
                 return; 
             }
 
@@ -467,6 +472,9 @@ export function initSlashCommand(appContext) {
                 // The embedPageCommand's callback might not have fired.
                 appContext.closeEmbedPageModal();
             }
+            if (appContext.emojiModal && appContext.emojiModal.style.display !== 'none' && appContext.closeEmojiModal) {
+                appContext.closeEmojiModal();
+            }
             slashCommandModal.style.display = 'none';
             slashCommandActive = false; 
             searchQuery = ''; 
@@ -512,6 +520,9 @@ export function initSlashCommand(appContext) {
                     // Check if the currently "selected" or "in-progress" command is embed-page.
                     // For now, just close it. A more robust check could be added.
                     appContext.closeEmbedPageModal();
+                }
+                if (appContext.emojiModal && appContext.emojiModal.style.display !== 'none' && appContext.closeEmojiModal) {
+                    appContext.closeEmojiModal();
                 }
                 slashCommandModal.style.display = 'none';
                 slashCommandActive = false; 
