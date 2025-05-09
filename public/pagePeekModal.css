@@ -1,0 +1,207 @@
+/* --- START OF FILE pagePeekModal.css --- */
+.page-peek-modal {
+    position: fixed;
+    background-color: var(--bg-secondary); /* Uniform background */
+    border: 1px solid var(--border-color-primary);
+    border-radius: var(--border-radius);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    z-index: 1100; /* Above moreOptionsModal and peek-modal-overlay */
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; /* Prevent content from spilling */
+    /* Padding might be better applied to internal sections if needed */
+}
+
+/* Default Peek Mode (floating) */
+.page-peek-modal.peek-mode {
+    width: 70vw; /* UPDATED: Increased from 60vw */
+    height: 80vh; /* UPDATED: Increased from 75vh */
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    resize: none;
+}
+
+/* UPDATED: Styles for side peek modes (left and right) */
+.page-peek-modal.side-peek-left-mode,
+.page-peek-modal.side-peek-right-mode {
+    width: 50vw;  /* Corrected to 50vw */
+    height: 100vh; /* Corrected to 100vh */
+    top: 0;
+    border-radius: 0;
+    resize: none;
+    transform: none !important; /* Ensure no transform from peek-mode interferes */
+    /* Box-shadow will be specific to left/right below */
+}
+
+/* UPDATED: Specific positioning and style for side-peek-left-mode */
+.page-peek-modal.side-peek-left-mode {
+    left: 0;
+    border-right: 1px solid var(--border-color-primary);
+    box-shadow: 5px 0 15px rgba(0,0,0,0.3); /* Shadow on its inner (right) edge */
+}
+
+/* UPDATED: Specific positioning and style for side-peek-right-mode */
+.page-peek-modal.side-peek-right-mode {
+    right: 0;
+    left: auto; /* Ensure left is not set if switching from a mode that sets it */
+    border-left: 1px solid var(--border-color-primary);
+    box-shadow: -5px 0 15px rgba(0,0,0,0.3); /* Shadow on its inner (left) edge */
+}
+
+/* NEW: Top section for controls, title, save button */
+.peek-modal-top-section {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 10px;
+    flex-shrink: 0;
+    cursor: default; /* No dragging */
+}
+
+.page-peek-modal-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.peek-control-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    padding: 5px;
+    border-radius: var(--border-radius-small);
+    cursor: pointer;
+    font-size: 0.9em;
+    line-height: 1;
+}
+.peek-control-btn:hover {
+    background-color: var(--bg-input);
+    color: var(--text-primary);
+}
+
+.page-peek-modal-title {
+    font-size: 0.95em;
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex-grow: 1;
+    text-align: center;
+    padding: 0 10px; /* Space around title from controls */
+}
+
+.page-peek-modal-status {
+    font-size: 0.85em;
+    padding: 6px 10px; /* Adjusted padding */
+    min-height: 1.5em; /* Reserve space */
+    text-align: left;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+.page-peek-modal-status.success { color: var(--accent-positive); }
+.page-peek-modal-status.error { color: var(--accent-negative); }
+.page-peek-modal-status.info { color: var(--accent-neutral); }
+
+
+.page-peek-modal-editor-area {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 10px;
+    overflow-y: hidden;
+}
+
+.modal-save-page-btn {
+    padding: 7px 14px;
+    background-color: var(--accent-primary);
+    color: white;
+    border: none;
+    border-radius: var(--border-radius-small);
+    cursor: pointer;
+    font-size: 0.9em;
+    font-weight: 500;
+    transition: background-color 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+.modal-save-page-btn:disabled {
+    background-color: var(--bg-tertiary);
+    color: var(--text-secondary);
+    cursor: not-allowed;
+}
+.modal-save-page-btn:hover:not(:disabled) {
+    background-color: var(--accent-primary-hover);
+}
+
+.modal-live-editor {
+    flex-grow: 1;
+    background-color: var(--bg-secondary); /* Match main editor bg */
+    padding: 10px;
+    border-radius: var(--border-radius-small);
+    overflow-y: auto;
+    color: var(--text-primary);
+    caret-color: var(--text-primary);
+    line-height: 1.6;
+    outline: none;
+    line-height: 1.5; /* Better for long-form text */
+    font-size: 1rem; /* Base content font size */
+    padding: 10px 5px 10px 0; /* Padding for content within editor. Right padding for scrollbar clearance. */
+                                /* Top padding can be adjusted */
+    width: 80%;
+    margin: 0 auto; /* Center the editor */
+}
+.modal-live-editor:focus {
+    border-color: var(--accent-primary);
+}
+
+.modal-live-editor.is-empty[data-placeholder]:before {
+    content: attr(data-placeholder);
+    position: absolute;
+    color: var(--text-placeholder);
+    pointer-events: none;
+    opacity: 0.7;
+}
+
+/* Minimized state */
+.page-peek-modal.minimized {
+    height: auto !important;
+    min-height: 0 !important;
+    width: 250px !important;
+    max-width: 250px !important;
+    /* left and right are now set via inline style in JS for directional minimize */
+    bottom: 20px;
+    top: auto !important;
+    transform: none !important;
+    resize: none !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+.page-peek-modal.minimized .page-peek-modal-status,
+.page-peek-modal.minimized .page-peek-modal-editor-area {
+    display: none;
+}
+/* .peek-modal-top-section remains visible when minimized */
+
+/* NEW: Background overlay for peek-mode */
+.peek-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(0, 0, 0, 0.5); /* Darkening effect */
+    z-index: 1099; /* Below peek modals (1100+), above other app content */
+    opacity: 0;
+    visibility: hidden; /* Use visibility for transition and accessibility */
+    transition: opacity 0.3s ease-in-out, visibility 0s linear 0.3s; /* Delay visibility change until opacity transition ends */
+}
+
+.peek-modal-overlay.active {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.3s ease-in-out, visibility 0s linear 0s; /* Make visible immediately for fade-in */
+}
+
+/* --- END OF FILE pagePeekModal.css --- */

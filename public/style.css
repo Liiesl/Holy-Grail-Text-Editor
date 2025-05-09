@@ -89,6 +89,10 @@ body {
     font-size: 1.2em;
     font-weight: 600;
     color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-right: 15px; /* Space between title and actions */
     line-height: 1.3;
     margin: 0; /* Remove default h3 margin */
     flex-grow: 1; /* Allow title to take available space */
@@ -100,13 +104,16 @@ body {
     min-height: 1.2em; /* Reserve space */
     font-weight: 500;
     text-align: right; /* Align status to the right, next to save button */
-    margin-left: 15px; /* Space from title */
-    margin-right: 15px; /* Space before save button */
 }
 .success { color: var(--accent-positive); }
 .error { color: var(--accent-negative); }
 .info { color: var(--accent-neutral); }
 
+.editor-top-bar-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px; /* Spacing between status, save, and more options button */
+}
 
 #save-page-btn {
     padding: 10px 20px;
@@ -133,182 +140,22 @@ body {
     background-color: var(--accent-primary-hover); 
 }
 
-
-.editor-panes { /* This is the container for live-editor */
-    display: flex; /* It's a flex item itself, and a flex container for .pane */
-    flex-direction: column; /* Stacks panes vertically if there were multiple */
-    flex-grow: 1; /* ADDED: Takes remaining vertical space in .editor-area */
-    min-height: 0; /* ADDED: Crucial for flex children with overflow in a flex column */
-    overflow-y: auto; /* ADDED: This part will scroll */
-}
-
-/* Live Editor Pane (#live-editor uses .pane class) */
-.pane#live-editor {
-    flex: 1; /* Takes all available space within .editor-panes */
-    background-color: var(--bg-primary); 
-    color: var(--text-primary);
-    border-radius: var(--border-radius);
-    outline: none; /* Remove focus outline from contenteditable */
-    line-height: 1.5; /* Better for long-form text */
-    font-size: 1rem; /* Base content font size */
-    padding: 10px 5px 10px 0; /* Padding for content within editor. Right padding for scrollbar clearance. */
-                                /* Top padding can be adjusted */
-    width: 80%;
-    margin: 0 auto; /* Center the editor */
-}
-
-/* Placeholder for contenteditable */
-.pane#live-editor.is-empty::before { /* Changed from [data-placeholder]:empty to .is-empty for JS consistency */
-    content: attr(data-placeholder);
-    color: var(--text-placeholder);
-    pointer-events: none; /* Crucial */
-    display: block; 
-}
-
-/* Content styling within the live editor */
-#live-editor h1, #live-editor h2, #live-editor h3,
-#live-editor h4, #live-editor h5, #live-editor h6 {
-    margin-top: 1em;
-    margin-bottom: 0.5em;
-    font-weight: 600;
-    line-height: 1.3;
-    color: var(--text-primary); 
-}
-#live-editor h1 { font-size: 2em; }
-#live-editor h2 { font-size: 1.6em; }
-#live-editor h3 { font-size: 1.3em; }
-
-#live-editor p {
-    margin-bottom: 0.5em;
-}
-#live-editor ul, #live-editor ol {
-    padding-left: 2em; 
-    margin-bottom: 0.5em;
-}
-#live-editor li {
-    margin-bottom: 0.3em;
-}
-
-/* General link styling */
-#live-editor a {
-    color: var(--accent-neutral);
-    text-decoration: none;
-    cursor: pointer; /* General pointer for links */
-}
-#live-editor a:hover {
-    text-decoration: underline;
-}
-
-/* Embedded Page Link Styling (Notion-like) */
-#live-editor a[href^="page://"] {
-    display: inline-flex; /* Align icon and text, allows element to wrap like inline content */
-    align-items: center;
-    background-color: var(--bg-embed); /* Custom slightly lighter background */
-    border: 1px solid var(--border-color-primary);
-    padding: 3px 8px; /* Slightly more padding */
-    border-radius: var(--border-radius-small); /* Slightly smaller radius */
-    text-decoration: none; /* Override general link styles */
-    color: var(--text-embed-link); /* UPDATED: Brighter color for better contrast */
-    font-weight: 600; /* UPDATED: Make text bold (semi-bold) */
-    margin: 0 3px; /* Small horizontal margin */
-    max-width: 350px; /* Max width of the embed element */
-    overflow: hidden; /* Required for text-overflow */
-    white-space: nowrap; /* Prevent text inside from wrapping */
-    text-overflow: ellipsis; /* Add ... if text is too long */
-    vertical-align: middle; /* Align with surrounding text better */
-    font-size: 0.9em; /* Slightly smaller font for the embed */
-    transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
-    cursor: pointer; /* UPDATED: Explicitly set pointer */
-}
-
-#live-editor a[href^="page://"]::before {
-    font-family: "Font Awesome 6 Free"; /* Font Awesome solid icons */
-    font-weight: 900; /* Use solid style for FA6 */
-    content: "\f15c"; /* fa-file-lines icon (document icon) */
-    margin-right: 7px; /* Slightly more Space between icon and text */
-    flex-shrink: 0; /* Prevent icon from shrinking if text is long */
-    /* Icon color will inherit from parent 'a' tag's color */
-}
-
-#live-editor a[href^="page://"]:hover {
-    background-color: var(--bg-tertiary);
-    border-color: var(--border-color-secondary);
-    color: var(--text-primary); /* Text becomes primary (brightest) on hover */
-    text-decoration: none; /* Ensure no underline on hover */
-    cursor: pointer; /* UPDATED: Ensure pointer on hover */
-}
-/* End of Embedded Page Link Styling */
-
-#live-editor img {
-    max-width: 100%;
-    height: auto;
-    border-radius: var(--border-radius);
-    margin: 15px 0;
-    border: 1px solid var(--border-color-primary); 
-}
-#live-editor blockquote {
-    border-left: 3px solid var(--accent-primary);
-    padding-left: 1em;
-    margin-left: 0;
-    margin-right: 0;
-    font-style: italic;
-    color: var(--text-secondary);
-}
-#live-editor pre {
-    background-color: var(--bg-input);
-    padding: 1em;
-    border-radius: var(--border-radius);
-    overflow-x: auto;
-    font-family: var(--font-mono);
-    font-size: 0.9em;
-    color: var(--text-primary);
-}
-#live-editor code {
-    font-family: var(--font-mono);
-    background-color: var(--bg-input);
-    padding: 0.2em 0.4em;
-    border-radius: 3px;
-    font-size: 0.9em;
-}
-#live-editor pre code {
-    padding: 0;
+/* More Options Button */
+#more-options-btn {
     background-color: transparent;
-    font-size: inherit;
+    color: var(--text-secondary);
+    border: none;
+    border-radius: var(--border-radius-small);
+    cursor: pointer;
+    padding: 8px; /* Square-ish clickable area */
+    font-size: 1em; /* Icon size */
+    line-height: 1; /* Ensure icon is centered */
+    transition: background-color 0.15s ease, color 0.15s ease;
 }
-
-/* NEW: Table Styling */
-#live-editor table {
-    width: auto; /* Or 100% if you prefer full-width tables */
-    border-collapse: collapse;
-    margin: 1em 0;
-    border: 1px solid var(--border-color-secondary); /* Outer border for the table */
-    position: relative; /* For positioning inline controls */
-}
-
-#live-editor th,
-#live-editor td {
-    border: 1px solid var(--border-color-primary);
-    padding: 8px 12px; /* More padding */
-    text-align: left;
-    vertical-align: top; /* Align content to the top of cells */
-    min-width: 80px; /* Minimum width for cells to be usable */
-    min-height: calc(1.5em + 16px); /* Ensures cell has height for one line of text (1.5em = font-size * line-height) + vertical padding (16px = 8px top + 8px bottom) */
-}
-
-#live-editor th {
-    background-color: var(--bg-secondary); /* Slightly different background for headers */
-    font-weight: 600;
+#more-options-btn:hover {
+    background-color: var(--bg-tertiary);
     color: var(--text-primary);
 }
-
-/* Ensure paragraphs inside table cells don't have excessive margins */
-#live-editor td p,
-#live-editor th p {
-    margin-bottom: 0; 
-}
-/* End of Table Styling */
-
-
 /* -------------------- */
 /* --- UTILITIES & SCROLLBARS --- */
 /* -------------------- */
@@ -453,5 +300,99 @@ body {
     opacity: 1;
     transform: scale(1.1);
 }
+
+/* -------------------- */
+/* --- MORE OPTIONS MODAL --- */
+/* -------------------- */
+.more-options-modal {
+    position: absolute;
+    background-color: var(--bg-tertiary);
+    border: 1px solid var(--border-color-primary);
+    border-radius: var(--border-radius);
+    box-shadow: var(--medium-shadow);
+    z-index: 1060; /* Above textStyleModal (1050) */
+    padding: 6px 0; /* Vertical padding for the container */
+    min-width: 240px; /* Adjust as needed */
+    color: var(--text-primary);
+}
+
+#more-options-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.more-options-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between; /* For label on left, content/icon on right */
+    padding: 8px 14px; /* More horizontal padding for items */
+    cursor: pointer;
+    font-size: 0.9em;
+    gap: 12px; /* Space between elements within an item */
+    min-height: 36px; /* Consistent item height */
+}
+
+.more-options-item:hover {
+    background-color: var(--bg-input); /* Subtle hover */
+}
+
+.more-options-item .more-options-label {
+    flex-grow: 1; /* Label takes available space by default */
+    white-space: nowrap;
+}
+
+/* For items with an icon before the label (Import/Export) */
+.more-options-item > i:first-child {
+    color: var(--text-secondary);
+    width: 16px;
+    text-align: center;
+    margin-right: -2px; /* Adjust gap slightly if main gap is 12px */
+}
+.more-options-item:hover > i:first-child {
+    color: var(--text-primary);
+}
+
+/* Specific for font item */
+.more-options-font-item {
+    cursor: default;
+}
+.more-options-font-item:hover {
+    background-color: transparent; /* No hover for the container li */
+}
+.font-options-placeholder {
+    display: flex;
+    gap: 6px;
+}
+.font-placeholder-btn {
+    background-color: var(--bg-input);
+    border: 1px solid var(--border-color-primary);
+    border-radius: var(--border-radius-small);
+    padding: 4px 8px;
+    font-size: 0.85em;
+    cursor: pointer;
+    color: var(--text-secondary);
+    transition: background-color 0.1s, border-color 0.1s, color 0.1s;
+}
+.font-placeholder-btn:hover {
+    border-color: var(--border-color-secondary);
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+}
+.font-placeholder-btn.active {
+    background-color: var(--accent-primary);
+    color: white;
+    border-color: var(--accent-primary-hover);
+}
+
+/* Icon on the far right of an item */
+.editor-option-icon-right {
+color: var(--text-secondary);
+/* margin-left: auto; Done by justify-content: space-between on parent */
+}
+.more-options-item:hover .editor-option-icon-right {
+color: var(--text-primary);
+}
+
 
 /* --- END OF FILE style.css --- */

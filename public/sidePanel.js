@@ -2,9 +2,9 @@
 export function initSidePanel(appContext) {
     const {
         pageTreeContainer,
-        actionsModal, 
+        actionsModal,
         showStatus,
-        userProfileAreaContainer, 
+        userProfileAreaContainer,
     } = appContext;
 
     const projectsHeadingContainer = document.getElementById('projects-heading-container');
@@ -65,7 +65,7 @@ export function initSidePanel(appContext) {
         icon.classList.add('fas', iconClass);
         button.appendChild(icon);
         button.addEventListener('click', (e) => {
-            e.stopPropagation(); 
+            e.stopPropagation();
             clickHandler(e);
         });
         return button;
@@ -77,13 +77,13 @@ export function initSidePanel(appContext) {
             console.warn("Projects heading container not found.");
             return;
         }
-        projectsHeadingContainer.innerHTML = ''; 
+        projectsHeadingContainer.innerHTML = '';
         const wrapper = document.createElement('div');
         wrapper.classList.add('projects-h2-wrapper');
 
         const h2 = document.createElement('h2');
         const h2Icon = document.createElement('i');
-        h2Icon.classList.add('fas', 'fa-stream'); 
+        h2Icon.classList.add('fas', 'fa-stream');
         h2.appendChild(h2Icon);
         h2.appendChild(document.createTextNode('Projects'));
         wrapper.appendChild(h2);
@@ -110,11 +110,13 @@ export function initSidePanel(appContext) {
     appContext.openActionsModal = (event, targetType, targetId, targetName) => {
         if (!actionsModal) return;
         const actionsList = actionsModal.querySelector('#actions-modal-list');
+        const modalContentElement = actionsModal.querySelector('.modal-content') || actionsModal;
         if (!actionsList) return;
 
-        actionsList.innerHTML = ''; 
+        actionsList.innerHTML = '';
 
         let actions = [];
+        // ... (your existing action definitions based on targetType)
         if (targetType === 'projects-list') {
             actions = [
                 { label: 'Sort Projects A-Z', icon: 'fa-sort-alpha-down', handler: () => { console.log('Sort Projects A-Z (NYI)'); showStatus('Sort Projects A-Z (Not Yet Implemented)', 'info'); } },
@@ -135,7 +137,8 @@ export function initSidePanel(appContext) {
             ];
         }
 
-        if (actions.length === 0) { 
+
+        if (actions.length === 0) {
              const li = document.createElement('li');
              li.textContent = "No actions available.";
              li.style.cursor = "default";
@@ -151,24 +154,113 @@ export function initSidePanel(appContext) {
                 li.appendChild(document.createTextNode(action.label));
                 li.addEventListener('click', () => {
                     action.handler();
-                    actionsModal.style.display = 'none'; 
+                    actionsModal.style.display = 'none';
+                    // Clean up the global click listener
+                    if (appContext.closeActionsModalOnClickOutside) {
+                        window.removeEventListener('click', appContext.closeActionsModalOnClickOutside, true);
+                        delete appContext.closeActionsModalOnClickOutside;
+                    }
                 });
                 actionsList.appendChild(li);
             });
         }
-        actionsModal.style.display = 'block';
-    };
 
+        // Positioning logic
+        const button = event.currentTarget; // The button that was clicked
+        const buttonRect = button.getBoundingClientRect();
+
+        // Temporarily display to measure, but keep invisible
+        actionsModal.style.visibility = 'hidden';
+        actionsModal.style.display = 'block';
+
+        let modalTop = buttonRect.bottom + 2; // 2px offset below button
+        let modalLeft = buttonRect.left;
+
+        // Adjust vertical position if it overflows viewport bottom
+        if (modalTop + actionsModal.offsetHeight > window.innerHeight - 10) { // 10px margin from viewport edge
+            modalTop = buttonRect.top - actionsModal.offsetHeight - 2; // Position above button
+        }
+        // Ensure it's not off-screen at the top
+        if (modalTop < 10) {
+            modalTop = 10;
+        }
+        actionsModal.style.top = `${modalTop}px`;
+
+        // Adjust horizontal position if it overflows viewport right
+        if (modalLeft + actionsModal.offsetWidth > window.innerWidth - 10) {
+            modalLeft = window.innerWidth - actionsModal.offsetWidth - 10; // Keep 10px from right edge
+        }
+        // Ensure it's not off-screen at the left
+        if (modalLeft < 10) {
+            modalLeft = 10;
+        }
+        actionsModal.style.left = `${modalLeft}px`;
+        
+        // Make it visible now that it's positioned
+        actionsModal.style.visibility = 'visible';
+
+
+        // Add a one-time click listener to the window to close the modal if clicked outside
+        // If there's an old listener, remove it first (defensive)
+        if (appContext.closeActionsModalOnClickOutside) {
+            window.removeEventListener('click', appContext.closeActionsModalOnClickOutside, true);
+        }
+
+        appContext.closeActionsModalOnClickOutside = (e) => {
+            // Use modalContentElement for contains check, as actionsModal itself might be larger due to box model details.
+            if (!modalContentElement.contains(e.target)) {
+                actionsModal.style.display = 'none';
+                window.removeEventListener('click', appContext.closeActionsModalOnClickOutside, true);
+                delete appContext.closeActionsModalOnClickOutside; // Clean up the stored function
+            }
+        };
+
+        // Use a timeout to prevent the same click that opened the modal from immediately closing it
+        setTimeout(() => {
+            window.addEventListener('click', appContext.closeActionsModalOnClickOutside, true); // Use capture phase
+        }, 0);
+    };
+    
+    // --- Helper to manage active state in sidebar ---
+    function setActiveSidebarItem(itemElement) {
+        if (!pageTreeContainer || !itemElement) return;
+
+        // Deselect any currently active project item
+        const currentActiveProjectItem = pageTreeContainer.querySelector('.project-item.active-project');
+        if (currentActiveProjectItem) {
+            currentActiveProjectItem.classList.remove('active-project');
+        }
+
+        // Deselect any currently active page item
+        const currentActivePageItem = pageTreeContainer.querySelector('li.page.active-page');
+        if (currentActivePageItem) {
+            currentActivePageItem.classList.remove('active-page');
+        }
+
+        if (itemElement.classList.contains('project-item')) {
+            itemElement.classList.add('active-project');
+            appContext.currentProject = itemElement.dataset.projectName;
+        } else if (itemElement.classList.contains('page')) {
+            itemElement.classList.add('active-page');
+            const parentProjectItem = itemElement.closest('.project-item');
+            if (parentProjectItem) {
+                parentProjectItem.classList.add('active-project'); // Ensure parent project is also visually active
+                appContext.currentProject = parentProjectItem.dataset.projectName;
+            } else {
+                console.warn("Active page is not inside a project item container. Cannot set current project from page's parent.");
+            }
+        }
+    }
 
     appContext.fetchProjects = async () => {
         renderUserProfileArea(); // Ensure user profile is up-to-date
 
-        if (!appContext.currentUser) { 
+        if (!appContext.currentUser) {
             if (appContext.pageTreeContainer) appContext.pageTreeContainer.innerHTML = '<p style="padding: 0 10px; font-size: 0.9em; color: var(--text-secondary);">Please log in to see projects.</p>';
             if (projectsHeadingContainer) projectsHeadingContainer.innerHTML = '';
             return;
         }
-        renderProjectsHeading(); 
+        renderProjectsHeading();
         try {
             const response = await appContext.fetchWithAuth('/api/projects');
             if (!response.ok) {
@@ -177,8 +269,8 @@ export function initSidePanel(appContext) {
             }
             const projects = await response.json();
 
-             if (appContext.pageTreeContainer) { 
-                appContext.pageTreeContainer.innerHTML = ''; 
+             if (appContext.pageTreeContainer) {
+                appContext.pageTreeContainer.innerHTML = '';
                 const projectListUl = document.createElement('ul');
                 projectListUl.classList.add('project-list');
 
@@ -213,112 +305,79 @@ export function initSidePanel(appContext) {
                         if (appContext.openActionsModal) appContext.openActionsModal(event, 'project', projectName, projectName);
                    });
                     const addPageToProjectBtn = createActionButton('fa-plus', 'Add Page to Project', () => {
-                        if (appContext.createNewSubpage) appContext.createNewSubpage(projectName, null, projectName); 
+                        if (appContext.createNewSubpage) appContext.createNewSubpage(projectName, null, projectName);
                     });
                     actionsGroup.appendChild(moreProjectItemActionsBtn);
                     actionsGroup.appendChild(addPageToProjectBtn);
-                    projectHeaderDiv.appendChild(actionsGroup); 
+                    projectHeaderDiv.appendChild(actionsGroup);
 
                     projectLi.appendChild(projectHeaderDiv);
 
-                    const projectPagesDiv = document.createElement('div');
+                    const projectPagesDiv = document.createElement('div'); // This is the container for the UL of pages
                     projectPagesDiv.classList.add('project-pages-container');
-                    projectPagesDiv.style.display = 'none';
+                    projectPagesDiv.style.display = 'none'; // Collapsed by default
                     projectLi.appendChild(projectPagesDiv);
 
-                    projectHeaderDiv.addEventListener('click', async (e) => {
-                        if (e.target.closest('.sidebar-action-btn')) return;
+                    // Project Chevron Click Listener (handles expansion/collapse)
+                    chevronIcon.addEventListener('click', async (e) => {
+                        e.stopPropagation();
+                        const isExpanded = projectLi.classList.toggle('expanded');
+                        chevronIcon.classList.toggle('fa-chevron-right', !isExpanded);
+                        chevronIcon.classList.toggle('fa-chevron-down', isExpanded);
+                        projectPagesDiv.style.display = isExpanded ? 'block' : 'none';
 
-                        const isCurrentlyActiveProject = projectLi.classList.contains('active-project');
-                        const isExpanded = projectLi.classList.contains('expanded');
-                        
-                        if (!isCurrentlyActiveProject && appContext.currentProject !== projectName && appContext.hasUnsavedChanges && appContext.currentPageState) {
-                            if (!confirm('You have unsaved changes. Are you sure you want to switch projects? Your changes will be lost.')) {
-                                return;
-                            }
-                            if(appContext.clearEditor) appContext.clearEditor(true);
+                        if (isExpanded && projectPagesDiv.children.length === 0) { // Only fetch if not already populated
+                            // Pass null for pageIdToScrollTo, projectPagesDiv is the container
+                            await appContext.fetchPageTree(projectName, null, projectPagesDiv);
+                        }
+                    });
+
+                    // Project Header Click Listener (handles selection and loading root page)
+                    projectHeaderDiv.addEventListener('click', async (e) => {
+                        if (e.target.closest('.sidebar-action-btn') || e.target.closest('.project-expand-icon')) return;
+
+                        const isProjectAlreadyActive = appContext.currentProject === projectName;
+                        const rootPageIdFromDataset = projectLi.dataset.rootPageId;
+                        const rootPageId = (rootPageIdFromDataset && rootPageIdFromDataset !== 'null' && rootPageIdFromDataset !== 'undefined') ? rootPageIdFromDataset : null;
+                        const isCurrentlyOnThisProjectsRootPage = isProjectAlreadyActive && rootPageId && appContext.currentPageState?.id === rootPageId;
+
+                        if (isProjectAlreadyActive && isCurrentlyOnThisProjectsRootPage) {
+                            return; // Clicked active project whose root page is already loaded. Do nothing.
                         }
 
-                        if (!isCurrentlyActiveProject) {
-                            const activeProjectItem = pageTreeContainer.querySelector('.project-item.active-project');
-                            if (activeProjectItem) {
-                                activeProjectItem.classList.remove('active-project', 'expanded');
-                                activeProjectItem.querySelector('.project-pages-container').style.display = 'none';
-                                const otherChevron = activeProjectItem.querySelector('.project-expand-icon');
-                                if (otherChevron) otherChevron.classList.replace('fa-chevron-down', 'fa-chevron-right');
+                        if (appContext.hasUnsavedChanges && appContext.currentPageState) {
+                            if (!confirm('You have unsaved changes. Are you sure you want to switch context? Your changes will be lost.')) {
+                                return;
                             }
-                            const allActivePageLis = pageTreeContainer.querySelectorAll('.project-pages-container li.active-page');
-                            allActivePageLis.forEach(li => li.classList.remove('active-page'));
+                            if (appContext.clearEditor) appContext.clearEditor(true);
+                        } else if (appContext.currentPageState && appContext.clearEditor) { // No unsaved changes, but switching page/project
+                             appContext.clearEditor(false);
+                        }
+                        
+                        setActiveSidebarItem(projectLi); // Sets currentProject and active visual state
 
-                            projectLi.classList.add('active-project', 'expanded');
-                            projectPagesDiv.style.display = 'block';
-                            chevronIcon.classList.replace('fa-chevron-right', 'fa-chevron-down');
-                            
-                            appContext.currentProject = projectName;
-
+                        // Load Root Page Content or fetch tree if root ID is unknown
+                        if (rootPageId) {
+                            if (appContext.loadPageContent) {
+                                await appContext.loadPageContent(projectName, rootPageId);
+                            }
+                        } else {
+                            // RootPageId is not known, fetch the tree. fetchPageTree will set dataset.rootPageId.
+                            // It will also render the tree (collapsed) into projectPagesDiv.
                             if (appContext.fetchPageTree) {
                                 const fetchedRootPageId = await appContext.fetchPageTree(projectName, null, projectPagesDiv);
                                 if (fetchedRootPageId && appContext.loadPageContent) {
-                                    if(appContext.clearEditor && (appContext.currentPageState?.id !== fetchedRootPageId || appContext.currentProject !== projectName)) {
-                                         appContext.clearEditor(true);
-                                    }
                                     await appContext.loadPageContent(projectName, fetchedRootPageId);
                                 } else if (!fetchedRootPageId) {
-                                    console.warn(`Project ${projectName} might be empty or rootPageId not found.`);
+                                    // Project is empty or error fetching tree, clear editor
+                                    console.warn(`Project ${projectName} is empty or rootPageId not found after fetchPageTree.`);
                                     if(appContext.clearEditor) appContext.clearEditor(true);
-                                }
-                            }
-                        } else { 
-                            const rootPageIdFromDataset = projectLi.dataset.rootPageId;
-                            const rootPageId = (rootPageIdFromDataset && rootPageIdFromDataset !== 'null' && rootPageIdFromDataset !== 'undefined') ? rootPageIdFromDataset : null;
-
-                            if (!rootPageId && appContext.fetchPageTree) {
-                                console.warn(`Root page ID not found for active project ${projectName}, attempting to refetch tree.`);
-                                const fetchedRootPageId = await appContext.fetchPageTree(projectName, null, projectPagesDiv);
-                                if (fetchedRootPageId) projectLi.dataset.rootPageId = fetchedRootPageId;
-                            }
-                            
-                            const isCurrentlyOnRootPage = rootPageId && appContext.currentPageState?.id === rootPageId && appContext.currentProject === projectName;
-
-                            if (rootPageId && !isCurrentlyOnRootPage) {
-                                if (appContext.hasUnsavedChanges && appContext.currentPageState) {
-                                    if (!confirm('You have unsaved changes. Are you sure you want to load the project root page? Your changes will be lost.')) {
-                                        return;
-                                    }
-                                    if(appContext.clearEditor) appContext.clearEditor(true);
-                                } else if (appContext.clearEditor && appContext.currentPageState) { 
-                                    appContext.clearEditor(false); 
-                                }
-
-                                if (appContext.loadPageContent) {
-                                    await appContext.loadPageContent(projectName, rootPageId);
-                                    const activeSubPageLi = projectPagesDiv.querySelector('li.active-page');
-                                    if (activeSubPageLi) activeSubPageLi.classList.remove('active-page');
-                                }
-                                
-                                if (!isExpanded) {
-                                    projectLi.classList.add('expanded');
-                                    projectPagesDiv.style.display = 'block';
-                                    chevronIcon.classList.replace('fa-chevron-right', 'fa-chevron-down');
-                                    if (!projectPagesDiv.hasChildNodes() && appContext.fetchPageTree) {
-                                        await appContext.fetchPageTree(projectName, null, projectPagesDiv);
-                                    }
-                                }
-                            } else {
-                                if (isExpanded) {
-                                    projectLi.classList.remove('expanded');
-                                    projectPagesDiv.style.display = 'none';
-                                    chevronIcon.classList.replace('fa-chevron-down', 'fa-chevron-right');
-                                } else { 
-                                    projectLi.classList.add('expanded');
-                                    projectPagesDiv.style.display = 'block';
-                                    chevronIcon.classList.replace('fa-chevron-right', 'fa-chevron-down');
-                                    if (!projectPagesDiv.hasChildNodes() && appContext.fetchPageTree) {
-                                        await appContext.fetchPageTree(projectName, null, projectPagesDiv);
-                                    }
+                                    if(appContext.currentPageDisplay) appContext.currentPageDisplay.textContent = 'Project is empty';
+                                    appContext.currentPageState = null;
                                 }
                             }
                         }
+                        // The project's page tree (projectPagesDiv) remains collapsed unless its chevron was clicked.
                     });
                     projectListUl.appendChild(projectLi);
                 });
@@ -329,34 +388,45 @@ export function initSidePanel(appContext) {
                 console.error('Error fetching projects:', error);
                 if (appContext.pageTreeContainer) appContext.pageTreeContainer.innerHTML = '<p>Error loading projects.</p>';
                 showStatus('Failed to load projects.', 'error');
-            } else if (error.message) { 
+            } else if (error.message) {
                 console.warn(`Auth error during fetchProjects: ${error.message}`);
             }
         }
     };
 
-    const renderPageTreeInternal = (nodes, parentElement, currentProjectName) => {
-        parentElement.innerHTML = '';
+    const renderPageTreeInternal = (nodes, parentUlElement, currentProjectName) => {
+        parentUlElement.innerHTML = ''; // Clear previous content of the UL
         if (!nodes || nodes.length === 0) {
             return;
         }
-        const ul = document.createElement('ul');
+
         nodes.forEach(node => {
             const li = document.createElement('li');
             li.dataset.pageId = node.id;
-            li.classList.add('page'); 
+            li.classList.add('page');
+            const hasChildren = node.children && node.children.length > 0;
+            if (hasChildren) {
+                li.classList.add('has-children');
+            }
 
-            const itemContentWrapper = document.createElement('div');
-            itemContentWrapper.classList.add('page-item-content');
+            const pageItemHeaderDiv = document.createElement('div');
+            pageItemHeaderDiv.classList.add('page-item-header');
+
+            const pageChevronIcon = document.createElement('i');
+            pageChevronIcon.classList.add('fas', 'fa-chevron-right', 'page-expand-icon');
+            if (!hasChildren) {
+                pageChevronIcon.style.visibility = 'hidden'; // Keep space for alignment or hide completely
+            }
+            pageItemHeaderDiv.appendChild(pageChevronIcon);
 
             const icon = document.createElement('i');
-            icon.classList.add('fas', 'fa-file-lines');
-            itemContentWrapper.appendChild(icon);
+            icon.classList.add('fas', 'fa-file-lines', 'page-type-icon');
+            pageItemHeaderDiv.appendChild(icon);
 
             const titleSpan = document.createElement('span');
             titleSpan.textContent = node.title;
             titleSpan.classList.add('page-title-text');
-            itemContentWrapper.appendChild(titleSpan);
+            pageItemHeaderDiv.appendChild(titleSpan);
 
             const actionsGroup = document.createElement('div');
             actionsGroup.classList.add('sidebar-actions-group');
@@ -368,48 +438,63 @@ export function initSidePanel(appContext) {
             });
             actionsGroup.appendChild(morePageActionsBtn);
             actionsGroup.appendChild(addSubpageBtn);
-            itemContentWrapper.appendChild(actionsGroup); 
+            pageItemHeaderDiv.appendChild(actionsGroup);
 
-            li.appendChild(itemContentWrapper);
+            li.appendChild(pageItemHeaderDiv);
 
-            itemContentWrapper.addEventListener('click', async (e) => {
-                if (e.target.closest('.sidebar-action-btn')) return; 
+            const childrenUl = document.createElement('ul');
+            childrenUl.classList.add('page-children-container');
+            childrenUl.style.display = 'none'; // Collapsed by default
+            li.appendChild(childrenUl);
 
-                if (appContext.hasUnsavedChanges && appContext.currentPageState && appContext.currentPageState.id !== node.id) {
+            // Page Chevron Click Listener (handles expansion/collapse of subpages)
+            if (hasChildren) {
+                pageChevronIcon.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const isExpanded = li.classList.toggle('expanded');
+                    pageChevronIcon.classList.toggle('fa-chevron-right', !isExpanded);
+                    pageChevronIcon.classList.toggle('fa-chevron-down', isExpanded);
+                    childrenUl.style.display = isExpanded ? 'block' : 'none';
+                    if (isExpanded && childrenUl.children.length === 0) { // Only render if not already rendered
+                        renderPageTreeInternal(node.children, childrenUl, currentProjectName);
+                    }
+                });
+            }
+
+            // Page Header Click Listener (for selection and loading content)
+            pageItemHeaderDiv.addEventListener('click', async (e) => {
+                if (e.target.closest('.sidebar-action-btn') || e.target.closest('.page-expand-icon')) return;
+
+                if (appContext.currentPageState?.id === node.id && appContext.currentProject === currentProjectName) {
+                    return; // Clicking already active page, do nothing for content load
+                }
+
+                if (appContext.hasUnsavedChanges && appContext.currentPageState) {
                     if (!confirm('You have unsaved changes. Are you sure you want to load a new page? Your changes will be lost.')) return;
-                    if(appContext.clearEditor) appContext.clearEditor(true); 
-                } else if (appContext.currentPageState?.id !== node.id && appContext.clearEditor && appContext.currentPageState) { 
+                    if(appContext.clearEditor) appContext.clearEditor(true);
+                } else if (appContext.currentPageState && appContext.clearEditor) {
                     appContext.clearEditor(false);
                 }
-                
-                const allActivePageLis = pageTreeContainer.querySelectorAll('.project-pages-container li.active-page');
-                allActivePageLis.forEach(activeLi => activeLi.classList.remove('active-page'));
-                
-                li.classList.add('active-page'); 
+
+                setActiveSidebarItem(li); // Sets active visual state and appContext.currentProject
 
                 if (appContext.loadPageContent) {
-                    await appContext.loadPageContent(currentProjectName, node.id);
+                    await appContext.loadPageContent(appContext.currentProject, node.id); // currentProject is set by setActiveSidebarItem
                 } else {
                     console.error("loadPageContent not available on appContext");
                 }
             });
-
-            if (node.children && node.children.length > 0) {
-                const childrenUl = document.createElement('ul');
-                renderPageTreeInternal(node.children, childrenUl, currentProjectName); 
-                li.appendChild(childrenUl);
-            }
-            ul.appendChild(li);
+            parentUlElement.appendChild(li);
         });
-        parentElement.appendChild(ul);
     };
 
-    appContext.fetchPageTree = async (projectName, activePageIdToRetain = null, targetElement = null) => {
-        if (!targetElement) {
+    appContext.fetchPageTree = async (projectName, pageIdToScrollTo = null, projectPagesDivElement = null) => {
+        let containerForTreeUl = projectPagesDivElement; // This is the DIV (e.g., .project-pages-container)
+        if (!containerForTreeUl) {
             const projectItemForTree = pageTreeContainer.querySelector(`.project-item[data-project-name="${CSS.escape(projectName)}"]`);
-            if (projectItemForTree) targetElement = projectItemForTree.querySelector('.project-pages-container');
-            if (!targetElement) {
-                console.error("fetchPageTree: Critical - could not find targetElement for project:", projectName);
+            if (projectItemForTree) containerForTreeUl = projectItemForTree.querySelector('.project-pages-container');
+            if (!containerForTreeUl) {
+                console.error("fetchPageTree: Critical - could not find container for page tree for project:", projectName);
                 showStatus(`Failed to find UI container for ${projectName}`, 'error');
                 return null;
             }
@@ -417,7 +502,8 @@ export function initSidePanel(appContext) {
         
         const projectItem = pageTreeContainer.querySelector(`.project-item[data-project-name="${CSS.escape(projectName)}"]`);
         
-        targetElement.innerHTML = '<li style="padding-left:10px; color: var(--text-secondary); font-style:italic;">Loading pages...</li>';
+        // Display loading message inside the container, will be replaced by the UL or error
+        containerForTreeUl.innerHTML = '<ul><li style="padding-left:10px; color: var(--text-secondary); font-style:italic;">Loading pages...</li></ul>';
         try {
             const response = await appContext.fetchWithAuth(`/api/project/${projectName}/tree`);
              if (!response.ok) {
@@ -427,73 +513,64 @@ export function initSidePanel(appContext) {
                         delete projectItem.dataset.rootPageId;
                         delete projectItem.dataset.rootPageTitle;
                     }
-                    targetElement.innerHTML = '<li class="no-subpages-message" style="padding-left:10px; color: var(--text-secondary); font-style:italic;">Project is empty.</li>';
-                    return null; 
+                    containerForTreeUl.innerHTML = '<ul><li class="no-subpages-message" style="padding-left:10px; color: var(--text-secondary); font-style:italic;">Project is empty.</li></ul>';
+                    return null;
                 }
                 throw new Error(errData.error || `HTTP error! status: ${response.status}`);
             }
             const treeData = await response.json();
             
-            if (projectItem && treeData.rootPageId) { 
+            containerForTreeUl.innerHTML = ''; // Clear loading message
+            const rootUl = document.createElement('ul');
+            // rootUl.classList.add('project-root-page-list'); // Optional: if specific styling for the first UL is needed
+            containerForTreeUl.appendChild(rootUl); // Add the UL to the container DIV
+
+            if (projectItem && treeData.rootPageId) {
                 projectItem.dataset.rootPageId = treeData.rootPageId;
                 projectItem.dataset.rootPageTitle = treeData.rootPageTitle;
             } else if (projectItem) {
                 delete projectItem.dataset.rootPageId;
                 delete projectItem.dataset.rootPageTitle;
                  if (!treeData.rootPageId && (!treeData.tree || treeData.tree.length === 0)) {
-                    targetElement.innerHTML = '<li class="no-subpages-message" style="padding-left:10px; color: var(--text-secondary); font-style:italic;">Project is empty or has no pages.</li>';
+                    rootUl.innerHTML = '<li class="no-subpages-message" style="padding-left:10px; color: var(--text-secondary); font-style:italic;">Project is empty or has no pages.</li>';
                     return null;
                  }
             }
 
-            renderPageTreeInternal(treeData.tree, targetElement, projectName);
+            renderPageTreeInternal(treeData.tree, rootUl, projectName); // Pass the new rootUl
 
-            let pageIdToMakeActiveInTree = null;
-            if (activePageIdToRetain && treeData.rootPageId && activePageIdToRetain !== treeData.rootPageId) {
-                pageIdToMakeActiveInTree = activePageIdToRetain;
-            } 
-            else if (appContext.currentPageState?.id && treeData.rootPageId &&
-                     appContext.currentPageState.id !== treeData.rootPageId && 
-                     appContext.currentProject === projectName) {
-                pageIdToMakeActiveInTree = appContext.currentPageState.id;
-            }
-
-            const currentActiveLiInTree = targetElement.querySelector('li.active-page');
-            if(currentActiveLiInTree) currentActiveLiInTree.classList.remove('active-page');
-
-            if (pageIdToMakeActiveInTree) {
-                const activeLi = targetElement.querySelector(`li[data-page-id="${CSS.escape(pageIdToMakeActiveInTree)}"]`);
-                if (activeLi) {
-                    activeLi.classList.add('active-page');
-                    if (targetElement.contains(activeLi)) {
-                       activeLi.scrollIntoView({ behavior: 'auto', block: 'nearest' });
-                    }
+            // Scroll the specified page into view if requested
+            if (pageIdToScrollTo) {
+                const liToScroll = rootUl.querySelector(`li.page[data-page-id="${CSS.escape(pageIdToScrollTo)}"]`);
+                if (liToScroll && rootUl.contains(liToScroll)) { // Ensure element is within this UL
+                   liToScroll.scrollIntoView({ behavior: 'auto', block: 'nearest' });
                 }
             }
             return treeData.rootPageId || null;
         } catch (error) {
             if (error.message && !error.message.toLowerCase().startsWith('auth error')) {
                 console.error(`Error fetching page tree for ${projectName}:`, error);
-                targetElement.innerHTML = `<li style="padding-left:10px; color: var(--text-error); font-style:italic;">Error: ${error.message}</li>`;
+                containerForTreeUl.innerHTML = `<ul><li style="padding-left:10px; color: var(--text-error); font-style:italic;">Error: ${error.message}</li></ul>`;
                 showStatus(`Failed to load tree for ${projectName}: ${error.message}`, 'error');
-            } else if (error.message) { 
+            } else if (error.message) {
                 console.warn(`Auth error during fetchPageTree for ${projectName}: ${error.message}`);
             }
-            return null; 
+            return null;
         }
     };
 
     appContext.createNewProject = async () => {
-        const projectName = prompt("Enter new project name:");
-        if (!projectName || projectName.trim() === "") {
-            if (projectName !== null) showStatus('Project name cannot be empty.', 'warn');
+        const projectNameStr = prompt("Enter new project name:");
+        if (!projectNameStr || projectNameStr.trim() === "") {
+            if (projectNameStr !== null) showStatus('Project name cannot be empty.', 'warn');
             return;
         }
+        const newProjectName = projectNameStr.trim();
 
         try {
             const response = await appContext.fetchWithAuth('/api/projects', {
                 method: 'POST',
-                body: JSON.stringify({ projectName: projectName.trim() })
+                body: JSON.stringify({ projectName: newProjectName })
             });
             const result = await response.json();
             if (!response.ok) {
@@ -501,21 +578,22 @@ export function initSidePanel(appContext) {
             }
             
             showStatus(`Project "${result.projectName}" created successfully!`, 'success');
-            await appContext.fetchProjects(); 
+            await appContext.fetchProjects(); // Refresh the entire project list
 
+            // Find and click the new project's header to select it and load its (empty) root.
             const newProjectItem = Array.from(pageTreeContainer.querySelectorAll('.project-item'))
                 .find(item => item.dataset.projectName === result.projectName);
             if (newProjectItem) {
                 const projectHeader = newProjectItem.querySelector('.project-header');
                 if (projectHeader) {
-                    projectHeader.click(); 
+                    projectHeader.click(); // This will select it, set active, and attempt to load root.
                 }
             }
         } catch (error) {
             if (error.message && !error.message.toLowerCase().startsWith('auth error')) {
                 console.error('Error creating project:', error);
                 showStatus(`Failed to create project: ${error.message}`, 'error');
-            } else if (error.message) { 
+            } else if (error.message) {
                 console.warn(`Auth error during createNewProject: ${error.message}`);
             }
         }
@@ -527,68 +605,97 @@ export function initSidePanel(appContext) {
             return;
         }
         const promptText = parentPageId ? `Enter title for new subpage under "${parentNameForPrompt}":` : `Enter title for new page in project "${projectName}":`;
-        const title = prompt(promptText);
+        const titleStr = prompt(promptText);
 
-        if (!title || title.trim() === '') {
-            if (title !== null) showStatus('Page title cannot be empty.', 'warn');
+        if (!titleStr || titleStr.trim() === '') {
+            if (titleStr !== null) showStatus('Page title cannot be empty.', 'warn');
             return;
         }
+        const newPageTitle = titleStr.trim();
 
         if (appContext.hasUnsavedChanges) {
             if (!confirm('You have unsaved changes. Create new page and discard current changes?')) {
                 return;
             }
-            if(appContext.clearEditor) appContext.clearEditor(true); 
-        } else if (appContext.clearEditor && appContext.currentPageState) { 
+            if(appContext.clearEditor) appContext.clearEditor(true);
+        } else if (appContext.clearEditor && appContext.currentPageState) {
             appContext.clearEditor(false);
         }
 
         try {
             const response = await appContext.fetchWithAuth(`/api/project/${projectName}/pages`, {
                 method: 'POST',
-                body: JSON.stringify({ title: title.trim(), parentId: parentPageId }) 
+                body: JSON.stringify({ title: newPageTitle, parentId: parentPageId })
             });
-            const result = await response.json();
+            const result = await response.json(); // Expects { newPageId, title }
             if (!response.ok) {
                 throw new Error(result.error || `HTTP error! status: ${response.status}`);
             }
             showStatus(`Page "${result.title}" created successfully!`, 'success');
 
-            const currentProjectItem = pageTreeContainer.querySelector(`.project-item.active-project[data-project-name="${CSS.escape(projectName)}"]`);
-            let projectPagesDiv = null;
-            if (currentProjectItem) {
-                projectPagesDiv = currentProjectItem.querySelector('.project-pages-container');
-            } else {
-                console.warn("Could not find active project item to refresh its tree after subpage creation. Performing broad refresh.");
-                await appContext.fetchProjects(); 
-                 const refreshedProjectItem = pageTreeContainer.querySelector(`.project-item[data-project-name="${CSS.escape(projectName)}"]`);
-                 if(refreshedProjectItem) {
-                    const header = refreshedProjectItem.querySelector('.project-header');
-                    if (header) header.click(); 
-                 }
-                if (appContext.loadPageContent && result.newPageId) {
-                    await appContext.loadPageContent(projectName, result.newPageId);
+            const projectItem = pageTreeContainer.querySelector(`.project-item[data-project-name="${CSS.escape(projectName)}"]`);
+            let projectPagesDiv = projectItem ? projectItem.querySelector('.project-pages-container') : null;
+
+            if (!projectItem || !projectPagesDiv) {
+                console.warn("Could not find project item or pages container to refresh after subpage creation. Performing broad refresh.");
+                await appContext.fetchProjects(); // Full refresh
+                // After full refresh, try to find the project item again and click its header to activate
+                const refreshedProjectItem = pageTreeContainer.querySelector(`.project-item[data-project-name="${CSS.escape(projectName)}"]`);
+                if (refreshedProjectItem) {
+                    refreshedProjectItem.querySelector('.project-header')?.click(); // Activate project
+                    projectPagesDiv = refreshedProjectItem.querySelector('.project-pages-container'); // Update projectPagesDiv
                 }
-                return;
+                // Fall through to load content and set active page
+            } else {
+                 // Step 1: Ensure project is expanded. Click its chevron if not.
+                if (!projectItem.classList.contains('expanded')) {
+                    const projectChevron = projectItem.querySelector('.project-expand-icon');
+                    if (projectChevron) {
+                        // Manually trigger expansion logic which includes fetchPageTree
+                        projectItem.classList.add('expanded');
+                        projectChevron.classList.remove('fa-chevron-right');
+                        projectChevron.classList.add('fa-chevron-down');
+                        projectPagesDiv.style.display = 'block';
+                        await appContext.fetchPageTree(projectName, result.newPageId, projectPagesDiv); // Fetch tree for expanded project
+                    }
+                } else {
+                    // Project already expanded, just refresh its tree
+                    await appContext.fetchPageTree(projectName, result.newPageId, projectPagesDiv);
+                }
             }
             
-             if (currentProjectItem && !currentProjectItem.classList.contains('expanded')) {
-                currentProjectItem.classList.add('expanded');
-                if(projectPagesDiv) projectPagesDiv.style.display = 'block';
-                const chevron = currentProjectItem.querySelector('.project-expand-icon');
-                if (chevron) chevron.classList.replace('fa-chevron-right', 'fa-chevron-down');
+            // Step 2: If the new page has a parent page, ensure that parent page is expanded.
+            // projectPagesDiv should be valid here if we reached this point from the 'else' block or after refresh
+            if (parentPageId && projectPagesDiv) {
+                const parentPageLi = projectPagesDiv.querySelector(`li.page[data-page-id="${CSS.escape(parentPageId)}"]`);
+                if (parentPageLi && parentPageLi.classList.contains('has-children') && !parentPageLi.classList.contains('expanded')) {
+                    const parentPageChevron = parentPageLi.querySelector('.page-item-header .page-expand-icon');
+                    if (parentPageChevron) {
+                         // Manually trigger expansion for parent page
+                        parentPageLi.classList.add('expanded');
+                        parentPageChevron.classList.remove('fa-chevron-right');
+                        parentPageChevron.classList.add('fa-chevron-down');
+                        const childrenContainer = parentPageLi.querySelector('.page-children-container');
+                        if(childrenContainer) childrenContainer.style.display = 'block';
+                        // If children weren't rendered by renderPageTreeInternal (e.g. deep nesting),
+                        // the click handler for chevron would do it. Here, we assume fetchPageTree rendered enough.
+                    }
+                }
             }
 
-            await appContext.fetchPageTree(projectName, result.newPageId, projectPagesDiv); 
-
+            // Step 3: Load the new page content and set it as active in the sidebar.
             if (appContext.loadPageContent && result.newPageId) {
                 await appContext.loadPageContent(projectName, result.newPageId);
+                const newPageLi = pageTreeContainer.querySelector(`.project-item[data-project-name="${CSS.escape(projectName)}"] li.page[data-page-id="${CSS.escape(result.newPageId)}"]`);
+                if (newPageLi) {
+                    setActiveSidebarItem(newPageLi);
+                }
             }
         } catch (error) {
              if (error.message && !error.message.toLowerCase().startsWith('auth error')) {
                 console.error('Error creating subpage:', error);
                 showStatus(`Failed to create subpage: ${error.message}`, 'error');
-            } else if (error.message) { 
+            } else if (error.message) {
                 console.warn(`Auth error during createNewSubpage: ${error.message}`);
             }
         }
@@ -604,18 +711,21 @@ export function initSidePanel(appContext) {
             if (!response.ok) throw new Error(result.error || `HTTP error! status: ${response.status}`);
             
             showStatus(result.message, 'success');
-            await appContext.fetchProjects(); 
-            if (appContext.currentProject === projectName) {
+            const wasCurrentProject = appContext.currentProject === projectName;
+            await appContext.fetchProjects(); // Refresh project list
+
+            if (wasCurrentProject) {
                 if (appContext.clearEditor) appContext.clearEditor(true);
-                appContext.currentProject = null;
+                appContext.currentProject = null; // Will be reset if another project is auto-selected
                 appContext.currentPageState = null;
                 if (appContext.currentPageDisplay) appContext.currentPageDisplay.textContent = 'No page selected';
+                // No specific item is made active here; user can select another project or create one.
             }
         } catch (error) {
             if (error.message && !error.message.toLowerCase().startsWith('auth error')) {
                 console.error(`Error deleting project ${projectName}:`, error);
                 showStatus(`Failed to delete project: ${error.message}`, 'error');
-            } else if (error.message) { 
+            } else if (error.message) {
                  console.warn(`Auth error during deleteProject for ${projectName}: ${error.message}`);
             }
         }
@@ -632,33 +742,38 @@ export function initSidePanel(appContext) {
             const response = await appContext.fetchWithAuth(`/api/project/${currentProjectName}/rename`, {
                 method: 'PUT', body: JSON.stringify({ newProjectName: newProjectName })
             });
-            const result = await response.json();
+            const result = await response.json(); // Expects { message, newProjectName }
             if (!response.ok) throw new Error(result.error || `HTTP error! status: ${response.status}`);
 
             showStatus(result.message, 'success');
-            const previousCurrentProject = appContext.currentProject;
+            const wasCurrentProject = appContext.currentProject === currentProjectName;
+            const currentPageIdIfActive = appContext.currentPageState?.id;
             
-            await appContext.fetchProjects(); 
+            await appContext.fetchProjects(); // Re-renders project list
 
-            if (previousCurrentProject === currentProjectName) {
+            if (wasCurrentProject) {
                 const newProjectItem = Array.from(pageTreeContainer.querySelectorAll('.project-item'))
-                    .find(item => item.dataset.projectName === newProjectName); 
+                    .find(item => item.dataset.projectName === result.newProjectName);
                 if (newProjectItem) {
-                    appContext.currentProject = newProjectName; 
-                    const projectHeader = newProjectItem.querySelector('.project-header');
-                    if (projectHeader) {
-                        projectHeader.click();
-                    }
+                    // Click header to select, set active, and load its root page
+                    // (or current page if it was part of this project)
+                    newProjectItem.querySelector('.project-header')?.click();
+                    // If a specific page was active within this project, it should ideally remain active
+                    // The projectHeader.click() loads root. If we want to restore page, more logic is needed.
+                    // For now, renaming a project and it being active will load its root.
+                    // If a page `P` under old project name was active, then after rename, project loads root.
+                    // `appContext.currentProject` is updated by `setActiveSidebarItem` in the click.
                 } else {
                      if (appContext.clearEditor) appContext.clearEditor(true);
                      appContext.currentProject = null;
+                     appContext.currentPageState = null;
                 }
             }
         } catch (error) {
             if (error.message && !error.message.toLowerCase().startsWith('auth error')) {
                 console.error(`Error renaming project ${currentProjectName}:`, error);
                 showStatus(`Failed to rename project: ${error.message}`, 'error');
-            } else if (error.message) { 
+            } else if (error.message) {
                 console.warn(`Auth error during renameProject for ${currentProjectName}: ${error.message}`);
             }
         }
@@ -670,20 +785,27 @@ export function initSidePanel(appContext) {
             if (newProjectNamePrompt !== null) showStatus('New project name cannot be empty.', 'warn');
             return;
         }
+        const newDuplicatedProjectName = newProjectNamePrompt.trim();
         try {
             const response = await appContext.fetchWithAuth(`/api/project/${projectName}/duplicate`, {
-                method: 'POST', body: JSON.stringify({ newProjectName: newProjectNamePrompt.trim() })
+                method: 'POST', body: JSON.stringify({ newProjectName: newDuplicatedProjectName })
             });
-            const result = await response.json();
+            const result = await response.json(); // Expects { message, newProjectName }
             if (!response.ok) throw new Error(result.error || `HTTP error! status: ${response.status}`);
             
             showStatus(result.message, 'success');
-            await appContext.fetchProjects(); 
+            await appContext.fetchProjects(); // Refresh project list
+            // Optionally, select the new duplicated project
+            const newProjectItem = Array.from(pageTreeContainer.querySelectorAll('.project-item'))
+                .find(item => item.dataset.projectName === result.newProjectName);
+            if (newProjectItem) {
+                // newProjectItem.querySelector('.project-header')?.click(); // Uncomment to auto-select
+            }
         } catch (error) {
             if (error.message && !error.message.toLowerCase().startsWith('auth error')) {
                 console.error(`Error duplicating project ${projectName}:`, error);
                 showStatus(`Failed to duplicate project: ${error.message}`, 'error');
-            } else if (error.message) { 
+            } else if (error.message) {
                  console.warn(`Auth error during duplicateProject for ${projectName}: ${error.message}`);
             }
         }
@@ -700,30 +822,46 @@ export function initSidePanel(appContext) {
             
             showStatus(result.message, 'success');
             
-            let shouldLoadRoot = false;
+            let pageToMakeActiveAfterDelete = appContext.currentPageState?.id;
+            let loadRootPageForProject = false;
+
             if (appContext.currentPageState && appContext.currentPageState.id === pageId) {
-                if (appContext.clearEditor) appContext.clearEditor(true); 
+                if (appContext.clearEditor) appContext.clearEditor(true);
                 appContext.currentPageState = null;
-                 if(appContext.currentPageDisplay) appContext.currentPageDisplay.textContent = 'No page selected';
-                shouldLoadRoot = true;
+                if(appContext.currentPageDisplay) appContext.currentPageDisplay.textContent = 'No page selected';
+                loadRootPageForProject = true;
+                pageToMakeActiveAfterDelete = null; // Root page will be determined and loaded
             }
             
-            const newRootId = await appContext.fetchPageTree(projectName, shouldLoadRoot ? null : appContext.currentPageState?.id);
+            const projectItem = pageTreeContainer.querySelector(`.project-item[data-project-name="${CSS.escape(projectName)}"]`);
+            const projectPagesDiv = projectItem ? projectItem.querySelector('.project-pages-container') : null;
+
+            // Refresh the tree. pageToMakeActiveAfterDelete is for scrolling into view.
+            const newRootId = await appContext.fetchPageTree(projectName, pageToMakeActiveAfterDelete, projectPagesDiv);
             
-            if (shouldLoadRoot) {
+            if (loadRootPageForProject) {
                 if (newRootId && appContext.loadPageContent) {
                     await appContext.loadPageContent(projectName, newRootId);
-                } else if (!newRootId) { 
+                    // After loading root, set it active in sidebar
+                    const rootPageLi = projectPagesDiv?.querySelector(`li.page[data-page-id="${CSS.escape(newRootId)}"]`);
+                    if (rootPageLi) setActiveSidebarItem(rootPageLi);
+                    else if (projectItem) setActiveSidebarItem(projectItem); // Activate project if no explicit root LI
+                } else if (!newRootId) { // Project became empty
                     showStatus('Project is now empty.', 'info');
-                     if(appContext.clearEditor) appContext.clearEditor(true); 
+                     if(appContext.clearEditor) appContext.clearEditor(true);
+                     if (projectItem) setActiveSidebarItem(projectItem); // Activate the (now empty) project
                 }
+            } else if (pageToMakeActiveAfterDelete && projectPagesDiv) {
+                // If a different page was active and still exists, re-ensure its LI is active
+                const stillActiveLi = projectPagesDiv.querySelector(`li.page[data-page-id="${CSS.escape(pageToMakeActiveAfterDelete)}"]`);
+                if (stillActiveLi) setActiveSidebarItem(stillActiveLi);
             }
 
         } catch (error) {
             if (error.message && !error.message.toLowerCase().startsWith('auth error')) {
                 console.error(`Error deleting page ${pageTitle}:`, error);
                 showStatus(`Failed to delete page: ${error.message}`, 'error');
-            } else if (error.message) { 
+            } else if (error.message) {
                  console.warn(`Auth error during deletePage for ${pageTitle}: ${error.message}`);
             }
         }
@@ -740,24 +878,29 @@ export function initSidePanel(appContext) {
             const response = await appContext.fetchWithAuth(`/api/project/${projectName}/page/${pageId}/rename`, {
                 method: 'PUT', body: JSON.stringify({ newTitle: newTitle })
             });
-            const result = await response.json();
+            const result = await response.json(); // Expects { message, newTitle }
             if (!response.ok) throw new Error(result.error || `HTTP error! status: ${response.status}`);
             
             showStatus(result.message, 'success');
-            await appContext.fetchPageTree(projectName, pageId); 
+
+            const projectItem = pageTreeContainer.querySelector(`.project-item[data-project-name="${CSS.escape(projectName)}"]`);
+            const projectPagesDiv = projectItem ? projectItem.querySelector('.project-pages-container') : null;
+            await appContext.fetchPageTree(projectName, pageId, projectPagesDiv); // pageId to scroll to it
 
             if (appContext.currentPageState && appContext.currentPageState.id === pageId) {
-                appContext.currentPageState.title = result.newTitle; 
+                appContext.currentPageState.title = result.newTitle;
                 if(appContext.currentPageDisplay) appContext.currentPageDisplay.textContent = `${projectName} / ${result.newTitle}`;
-                if (appContext.loadPageContent) {
-                    await appContext.loadPageContent(projectName, pageId);
+                // Re-set active LI as its DOM element might have changed after fetchPageTree
+                const renamedPageLi = projectPagesDiv?.querySelector(`li.page[data-page-id="${CSS.escape(pageId)}"]`);
+                if (renamedPageLi) {
+                    setActiveSidebarItem(renamedPageLi);
                 }
             }
         } catch (error) {
             if (error.message && !error.message.toLowerCase().startsWith('auth error')) {
                 console.error(`Error renaming page ${currentTitle}:`, error);
                 showStatus(`Failed to rename page: ${error.message}`, 'error');
-            } else if (error.message) { 
+            } else if (error.message) {
                 console.warn(`Auth error during renamePage for ${currentTitle}: ${error.message}`);
             }
         }
@@ -766,38 +909,46 @@ export function initSidePanel(appContext) {
     appContext.duplicatePage = async (projectName, pageId, pageTitle) => {
         try {
             const response = await appContext.fetchWithAuth(`/api/project/${projectName}/page/${pageId}/duplicate`, { method: 'POST' });
-            const result = await response.json(); 
+            const result = await response.json(); // Expects { message, newPageId (or newRootPageId) }
             if (!response.ok) throw new Error(result.error || `HTTP error! status: ${response.status}`);
             
             showStatus(result.message, 'success');
-            
-            const newDuplicatedPageId = result.newPageId || result.newRootPageId; 
+            const newDuplicatedPageId = result.newPageId || result.newRootPageId;
 
             if (appContext.hasUnsavedChanges) {
                 if (!confirm('You have unsaved changes. Load duplicated page and discard current changes?')) {
-                    await appContext.fetchPageTree(projectName, appContext.currentPageState?.id); 
+                     // Just refresh tree but don't load the new page or change active state
+                    const projectItem = pageTreeContainer.querySelector(`.project-item[data-project-name="${CSS.escape(projectName)}"]`);
+                    const projectPagesDiv = projectItem ? projectItem.querySelector('.project-pages-container') : null;
+                    await appContext.fetchPageTree(projectName, appContext.currentPageState?.id, projectPagesDiv);
                     return;
                 }
-                if(appContext.clearEditor) appContext.clearEditor(true); 
+                if(appContext.clearEditor) appContext.clearEditor(true);
             } else if (appContext.clearEditor && appContext.currentPageState) {
                 appContext.clearEditor(false);
             }
 
-            await appContext.fetchPageTree(projectName, newDuplicatedPageId); 
+            const projectItem = pageTreeContainer.querySelector(`.project-item[data-project-name="${CSS.escape(projectName)}"]`);
+            const projectPagesDiv = projectItem ? projectItem.querySelector('.project-pages-container') : null;
+            await appContext.fetchPageTree(projectName, newDuplicatedPageId, projectPagesDiv); // Scroll to new duplicated page
+            
             if (appContext.loadPageContent && newDuplicatedPageId) {
                 await appContext.loadPageContent(projectName, newDuplicatedPageId);
+                const duplicatedPageLi = projectPagesDiv?.querySelector(`li.page[data-page-id="${CSS.escape(newDuplicatedPageId)}"]`);
+                if (duplicatedPageLi) {
+                    setActiveSidebarItem(duplicatedPageLi);
+                }
             }
         } catch (error) {
             if (error.message && !error.message.toLowerCase().startsWith('auth error')) {
                 console.error(`Error duplicating page ${pageTitle}:`, error);
                 showStatus(`Failed to duplicate page: ${error.message}`, 'error');
-            } else if (error.message) { 
+            } else if (error.message) {
                  console.warn(`Auth error during duplicatePage for ${pageTitle}: ${error.message}`);
             }
         }
     };
 
-    // Initial render of user profile area, in case user is already logged in
-    // (e.g. from a previous session restored by checkAuthStatus)
+    // Initial render of user profile area
     renderUserProfileArea();
 }

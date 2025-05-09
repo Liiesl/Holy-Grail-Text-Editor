@@ -5,24 +5,19 @@
    <meta name="viewport" content="width=device-width, initial-scale=1.0">
    <title>Holy Grail Type Editor</title>
    <link rel="stylesheet" href="style.css">
-   <link rel="stylesheet" href="auth.css"> <!-- ADDED THIS LINE -->
+   <link rel="stylesheet" href="liveEditor.css">
+   <link rel="stylesheet" href="auth.css">
    <link rel="stylesheet" href="/SCMD/slashCommand.css">
    <link rel="stylesheet" href="sidebar.css">
    <link rel="stylesheet" href="textStyleModal.css">
    <link rel="stylesheet" href="/SCMD/embedPageModal.css">
    <link rel="stylesheet" href="/SCMD/emojiModal.css">
    <link rel="stylesheet" href="userSettingsModal.css">
+   <link rel="stylesheet" href="pagePeekModal.css"> 
    <script src="https://cdnjs.cloudflare.com/ajax/libs/turndown/7.0.0/turndown.js"></script>
    <script src="https://cdnjs.cloudflare.com/ajax/libs/showdown/2.1.0/showdown.min.js"></script>
    <script src="https://cdnjs.cloudflare.com/ajax/libs/diff_match_patch/20121119/diff_match_patch.js"></script>
    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
-   <style>
-       /* Basic Auth Form Styles REMOVED FROM HERE */
-       
-       .app-header { padding: 10px; background-color: #f0f0f0; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; }
-       #logged-in-user { font-size: 0.9em; }
-       #logout-btn { padding: 5px 10px; font-size: 0.9em; background-color: #e0e0e0; border: 1px solid #ccc; cursor: pointer;}
-   </style>
 </head>
 <body>
     <div id="auth-container">
@@ -75,8 +70,11 @@
             <main class="editor-area">
                 <div class="editor-top-bar">
                     <h4 id="current-page-display">No page selected</h4>
-                    <p id="status-message"></p>
-                    <button id="save-page-btn" disabled><i class="fas fa-save"></i></button>
+                    <div class="editor-top-bar-actions">
+                        <p id="status-message"></p>
+                        <button id="save-page-btn" disabled><i class="fas fa-save"></i></button>
+                        <button id="more-options-btn" title="More options"><i class="fas fa-ellipsis-h"></i></button>
+                    </div>
                 </div>
                 <div class="editor-panes">
                     <div id="live-editor" contenteditable="true" class="pane" data-placeholder="Write here... Type '/' for commands."></div>
@@ -106,6 +104,39 @@
        <button data-command="underline" title="Underline (Ctrl+U)"><i class="fas fa-underline"></i></button>
        <button data-command="strikeThrough" title="Strikethrough"><i class="fas fa-strikethrough"></i></button>
        <button data-command="createLink" title="Create/Edit Link"><i class="fas fa-link"></i></button>
+   </div>
+   <!-- More Options Modal -->
+   <div id="more-options-modal" class="more-options-modal" style="display:none;">
+       <ul id="more-options-list">
+           <li class="more-options-item more-options-font-item">
+               <span class="more-options-label">Font</span>
+               <div class="font-options-placeholder">
+                   <div class="font-placeholder-btn active">Aa</div>
+                   <div class="font-placeholder-btn">Aa</div>
+                   <div class="font-placeholder-btn">Aa</div>
+               </div>
+           </li>
+           <li class="more-options-item" data-action="toggle-full-width">
+               <span class="more-options-label">Full Width</span>
+               <i class="fas fa-arrows-alt-h editor-option-icon-right"></i>
+           </li>
+           <li class="more-options-item" data-action="import-page">
+               <i class="fas fa-file-import"></i>
+               <span class="more-options-label">Import</span>
+           </li>
+           <li class="more-options-item" data-action="export-page">
+               <i class="fas fa-file-export"></i>
+               <span class="more-options-label">Export</span>
+           </li>
+           <li class="more-options-item" data-action="export-page">
+               <i class="fas fa-file-export"></i>
+               <span class="more-options-label">Export</span>
+           </li>
+           <li class="more-options-item" data-action="peek-page">
+               <i class="fas fa-clone"></i>
+               <span class="more-options-label">Peek Page</span>
+           </li>
+       </ul>
    </div>
 
    <!-- Embed Page Modal will be dynamically created by embedPageModal.js -->
