@@ -307,50 +307,28 @@ class PagePeekModal {
         if (!this.toggleViewBtn) return;
 
         if (this.isMinimized) {
-            // Button is typically hidden when minimized by toggleMinimize logic.
-            // Set disabled to true for logical consistency if it were to become visible.
             this.toggleViewBtn.disabled = true;
             return;
         }
 
-        // Filter for other modals that are currently active (not minimized).
-        const otherActiveNonMinimizedModals = this.globalAppContext.activePeekModals.filter(
-            m => m !== this && !m.isMinimized
-        );
+        const otherActiveModals = this.globalAppContext.activePeekModals.filter(m => m !== this && !m.isMinimized);
 
-        if (otherActiveNonMinimizedModals.length === 0) {
-            // This is the only active, non-minimized modal. Button should be enabled
-            // to allow toggling its mode (e.g., from 'peek' to 'side-peek' or vice-versa).
+        // Enable the toggle button if:
+        // 1. This is the only active modal (not minimized)
+        // 2. There is exactly one other active modal AND:
+        //    a. Either modal is in 'peek' mode OR
+        //    b. The modals are in different side-peek modes
+        if (otherActiveModals.length === 0) {
             this.toggleViewBtn.disabled = false;
-        } else if (otherActiveNonMinimizedModals.length === 1) {
-            // There is exactly one other active, non-minimized modal.
-            // So, there are two active, non-minimized modals in total (this + the other one).
-            const otherModal = otherActiveNonMinimizedModals[0];
-            if (this.mode.startsWith('side-peek') && otherModal.mode.startsWith('side-peek')) {
-                // Both modals are in side-peek modes (e.g., left and right).
-                // In this state, toggling one to 'peek' mode is usually disallowed or
-                // immediately rectified by handlePeekModalLayoutChange.
-                // Thus, the toggle button is disabled.
-                this.toggleViewBtn.disabled = true;
-            } else {
-                // Not both are in side-peek mode. Example scenarios:
-                // 1. This modal is 'peek', other is 'side-peek'.
-                // 2. This modal is 'side-peek', other is 'peek'.
-                // 3. Both modals are 'peek'.
-                // In these cases, toggling is allowed. handlePeekModalLayoutChange will
-                // then arrange them (e.g., into two side-peeks if both were 'peek').
-                this.toggleViewBtn.disabled = false;
-            }
+        } else if (otherActiveModals.length === 1) {
+            const otherModal = otherActiveModals[0];
+            const bothAreSidePeek = this.mode.startsWith('side-peek') && otherModal.mode.startsWith('side-peek');
+            const sameSidePeekMode = bothAreSidePeek && this.mode === otherModal.mode;
+            this.toggleViewBtn.disabled = sameSidePeekMode;
         } else {
-            // otherActiveNonMinimizedModals.length > 1.
-            // This implies there are more than 2 active, non-minimized modals in total
-            // (this modal + 2 or more others).
-            // This state should ideally not occur if appContext.maxPeekModals = 2 is enforced.
-            // As a defensive measure, disable the button.
             this.toggleViewBtn.disabled = true;
         }
     }
-
 
     async performAutosave() { console.warn("performAutosave called on modal before initEditArea configured it.");}
     async savePage() { console.warn("savePage called on modal before initEditArea configured it."); }
