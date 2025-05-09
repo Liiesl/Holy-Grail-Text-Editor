@@ -1,6 +1,6 @@
 {
     "verbose": true,
-    "watch": ["server.js"], 
+    "watch": ["server.js", "db.js", "auth.js"], 
     "ignore": [
       ".git",
       "node_modules/**/node_modules",
