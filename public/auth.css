@@ -1,0 +1,148 @@
+/* public/auth.css */
+
+#auth-container {
+    display: none; /* Controlled by JS */
+    width: 420px;
+    margin: 80px auto; /* Increased top margin for better centering on large screens */
+    padding: 35px 40px; /* Generous padding */
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color-primary);
+    border-radius: var(--border-radius);
+    box-shadow: var(--medium-shadow);
+    color: var(--text-primary);
+}
+
+#auth-container > h2 { /* Main "Login / Register" heading */
+    text-align: center;
+    color: var(--text-primary);
+    font-size: 1.8em;
+    font-weight: 600;
+    margin-bottom: 30px;
+    letter-spacing: 0.5px;
+}
+
+.auth-form h3 { /* "Login" or "Register" sub-headings */
+    color: var(--text-primary); /* Brighter than secondary for clarity */
+    font-size: 1.4em;
+    font-weight: 500;
+    margin-bottom: 25px;
+    text-align: left;
+}
+
+.auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: 20px; /* Space between form groups, button, and link */
+}
+
+.auth-form .form-group {
+    display: flex;
+    flex-direction: column;
+}
+
+.auth-form label {
+    font-size: 0.875em; /* Approx 14px */
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+    font-weight: 500;
+}
+
+.auth-form input[type="text"],
+.auth-form input[type="password"],
+.auth-form input[type="email"] {
+    width: 100%;
+    padding: 12px 15px;
+    background-color: var(--bg-input);
+    border: 1px solid var(--border-color-primary);
+    border-radius: var(--border-radius-small);
+    color: var(--text-primary);
+    font-size: 1em;
+    box-sizing: border-box;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.auth-form input[type="text"]::placeholder,
+.auth-form input[type="password"]::placeholder,
+.auth-form input[type="email"]::placeholder {
+    color: var(--text-placeholder);
+    font-style: italic;
+    font-size: 0.95em;
+}
+
+.auth-form input[type="text"]:focus,
+.auth-form input[type="password"]:focus,
+.auth-form input[type="email"]:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+    /* Using a common way to create glow with accent color if --accent-primary-rgb isn't defined */
+    box-shadow: 0 0 0 2px var(--accent-primary); 
+}
+
+.auth-form button[type="submit"] {
+    width: 100%;
+    padding: 12px 15px;
+    background-color: var(--accent-primary);
+    color: white; /* Ensuring white text for contrast */
+    border: none;
+    border-radius: var(--border-radius-small);
+    font-size: 1em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 5px; /* Small margin to slightly separate from the last form group */
+}
+
+.auth-form button[type="submit"]:hover {
+    background-color: var(--accent-primary-hover);
+}
+
+.auth-toggle-link {
+    text-align: center;
+    font-size: 0.9em;
+    color: var(--text-secondary);
+}
+
+.auth-toggle-link a {
+    color: var(--accent-neutral);
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.auth-toggle-link a:hover {
+    text-decoration: underline;
+    color: var(--accent-primary);
+}
+
+#auth-status-message {
+    margin-bottom: 20px;
+    padding: 10px 15px;
+    border-radius: var(--border-radius-small);
+    text-align: center;
+    font-size: 0.95em;
+    font-weight: 500;
+    border-width: 1px;
+    border-style: solid;
+    background-color: var(--bg-input); /* Consistent dark background */
+}
+
+#auth-status-message.status-error {
+    color: var(--accent-negative);
+    border-color: var(--accent-negative);
+}
+
+#auth-status-message.status-success {
+    color: var(--accent-positive);
+    border-color: var(--accent-positive);
+}
+
+#auth-status-message.status-info {
+    color: var(--accent-neutral);
+    border-color: var(--accent-neutral);
+}
+
+/* Hide empty status messages cleanly */
+#auth-status-message:empty {
+    display: none;
+}

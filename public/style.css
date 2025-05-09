@@ -51,11 +51,13 @@ body {
     min-height: 100vh;
     font-size: 15px; /* Base font size */
     line-height: 1.5;
+    overflow: hidden; /* ADDED: Prevent body scroll when sidebar and editor manage their own */
 }
 
 .container {
     display: flex;
     width: 100%;
+    /* height: 100vh; */ /* Consider removing if body overflow:hidden and children manage height */
 }
 
 /* -------------------- */
@@ -63,37 +65,96 @@ body {
 /* -------------------- */
 .editor-area {
     flex-grow: 1;
-    padding: 25px 40px; /* More spacious padding */
+    padding: 0 10px 25px 10px; /* Top padding removed, handled by top-bar's margin/padding */
+                               /* Bottom padding added for scrollable area */
     display: flex;
     flex-direction: column;
-    overflow-y: auto; /* Allows editor content to scroll independently if needed */
-    max-width: 80%; /* REMOVED this for full width editor area - or adjust as needed */
-    position: relative; /* Needed for absolute positioning of children if any related to editor area */
+    height: 100vh; /* ADDED: Make editor area take full viewport height */
+    position: relative; 
+    /* overflow-y: auto; */ /* REMOVED: Editor area itself does not scroll */
+}
+
+/* --- SAVE BUTTON & STATUS --- (Moved before editor-panes for structure) */
+.editor-top-bar {
+    display: flex;
+    flex-direction: row; /* Default, but explicit */
+    justify-content: space-between;
+    align-items: center; /* Align items vertically */
+    padding-top: 25px; /* Top padding for the whole editor area content */
+    margin-bottom: 5px;
+    flex-shrink: 0; /* ADDED: Prevent this from shrinking */
 }
 
 #current-page-display {
-    margin-bottom: 25px;
-    font-size: 1.8em; /* Larger title */
+    font-size: 1.2em;
     font-weight: 600;
-    color: var(--text-primary);
+    color: var(--text-secondary);
     line-height: 1.3;
+    margin: 0; /* Remove default h3 margin */
+    flex-grow: 1; /* Allow title to take available space */
 }
 
-.editor-panes { /* This is the container for live-editor */
+#status-message {
+    /* margin-top: 15px; */ /* Removed, alignment handled by flexbox in top-bar */
+    font-size: 0.9em;
+    min-height: 1.2em; /* Reserve space */
+    font-weight: 500;
+    text-align: right; /* Align status to the right, next to save button */
+    margin-left: 15px; /* Space from title */
+    margin-right: 15px; /* Space before save button */
+}
+.success { color: var(--accent-positive); }
+.error { color: var(--accent-negative); }
+.info { color: var(--accent-neutral); }
+
+
+#save-page-btn {
+    padding: 10px 20px;
+    background-color: var(--accent-primary); 
+    color: white;
+    border: none;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    /* align-self: flex-start; */ /* Removed, alignment handled by flexbox in top-bar */
+    font-size: 0.95em;
+    font-weight: 500;
+    transition: background-color 0.15s ease;
     display: flex;
-    flex-grow: 1;
-    min-height: 400px; /* Ensure editor has decent minimum height */
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0; /* Prevent button from shrinking */
+}
+#save-page-btn:disabled {
+    background-color: var(--bg-tertiary);
+    color: var(--text-secondary);
+    cursor: not-allowed;
+}
+#save-page-btn:hover:not(:disabled) {
+    background-color: var(--accent-primary-hover); 
+}
+
+
+.editor-panes { /* This is the container for live-editor */
+    display: flex; /* It's a flex item itself, and a flex container for .pane */
+    flex-direction: column; /* Stacks panes vertically if there were multiple */
+    flex-grow: 1; /* ADDED: Takes remaining vertical space in .editor-area */
+    min-height: 0; /* ADDED: Crucial for flex children with overflow in a flex column */
+    overflow-y: auto; /* ADDED: This part will scroll */
 }
 
 /* Live Editor Pane (#live-editor uses .pane class) */
 .pane#live-editor {
-    flex: 1;
+    flex: 1; /* Takes all available space within .editor-panes */
     background-color: var(--bg-primary); 
     color: var(--text-primary);
     border-radius: var(--border-radius);
     outline: none; /* Remove focus outline from contenteditable */
     line-height: 1.5; /* Better for long-form text */
     font-size: 1rem; /* Base content font size */
+    padding: 10px 5px 10px 0; /* Padding for content within editor. Right padding for scrollbar clearance. */
+                                /* Top padding can be adjusted */
+    width: 80%;
+    margin: 0 auto; /* Center the editor */
 }
 
 /* Placeholder for contenteditable */
@@ -247,44 +308,6 @@ body {
 }
 /* End of Table Styling */
 
-
-/* -------------------- */
-/* --- SAVE BUTTON & STATUS --- */
-/* -------------------- */
-#save-page-btn {
-    padding: 10px 20px;
-    background-color: var(--accent-positive); /* Green for save */
-    color: white;
-    border: none;
-    border-radius: var(--border-radius);
-    cursor: pointer;
-    margin-top: 20px;
-    align-self: flex-start;
-    font-size: 0.95em;
-    font-weight: 500;
-    transition: background-color 0.15s ease;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-#save-page-btn:disabled {
-    background-color: var(--bg-tertiary);
-    color: var(--text-secondary);
-    cursor: not-allowed;
-}
-#save-page-btn:hover:not(:disabled) {
-    background-color: #28a745; /* Darker green */
-}
-
-#status-message {
-    margin-top: 15px;
-    font-size: 0.9em;
-    min-height: 1.2em; /* Reserve space */
-    font-weight: 500;
-}
-.success { color: var(--accent-positive); }
-.error { color: var(--accent-negative); }
-.info { color: var(--accent-neutral); }
 
 /* -------------------- */
 /* --- UTILITIES & SCROLLBARS --- */

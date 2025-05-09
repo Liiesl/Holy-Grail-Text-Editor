@@ -1,98 +1,79 @@
-// --- START OF FILE defaultProjectInitializer.js ---
-
-const { v4: uuidv4 } = require('uuid');
-const fsPromises = require('fs').promises;
-const fssync = require('fs');
-const path = require('path');
+// Default project initializer - DB version with specific "Holy Grail" tutorial content
 
 /**
- * Initializes a default "Welcome" project with an interactive tutorial.
- * @param {string} projectPath - The absolute path to the project directory.
- * @param {string} projectName - The name of the project (will be "Welcome").
- * @param {object} config - Configuration object.
- * @param {string} config.PAGES_DIR_NAME - The name of the directory to store page content.
- * @param {function} config.writeProjectMeta - Async function to write project metadata.
+ * Initializes a default "Welcome" project with an interactive tutorial in the database
+ * for a specific user, using an existing database client.
+ * @param {object} dbClient - The active database client (from db.getClient() or transaction).
+ * @param {string} userId - The ID of the user for whom to create the project.
+ * @param {string} projectNameToCreate - The name for the project in the database (e.g., "Welcome").
  */
-async function initializeDefaultProject(projectPath, projectName, config) {
-    const { PAGES_DIR_NAME, writeProjectMeta } = config;
+async function initializeDefaultProject(dbClient, userId, projectNameToCreate = "Welcome") {
+    const tutorialRootPageTitle = "👋 Welcome to Holy Grail!"; // Static title from user's content
 
-    const actualProjectName = "Welcome"; // The project folder will be "Welcome"
+    try {
+        // 1. Create Project or get existing ID for the specific user
+        const projectRes = await dbClient.query(
+            'INSERT INTO projects (name, user_id) VALUES ($1, $2) ON CONFLICT (user_id, name) DO NOTHING RETURNING id',
+            [projectNameToCreate, userId]
+        );
 
-    const pagesDir = path.join(projectPath, PAGES_DIR_NAME);
-    if (!fssync.existsSync(pagesDir)) {
-        fssync.mkdirSync(pagesDir, { recursive: true });
-    }
+        let projectId;
 
-    const rootPageId = uuidv4();
-    const sidebarPageId = uuidv4();
-    const slashCommandsPageId = uuidv4();
-    const linkingSubpagesPageId = uuidv4();
-    const savingManagingPageId = uuidv4();
-    const fullCommandListPageId = uuidv4();
-    const now = new Date().toISOString();
+        if (projectRes.rows.length > 0) {
+            projectId = projectRes.rows[0].id;
+            console.log(`Default project "${projectNameToCreate}" (ID: ${projectId}) created in DB for user ${userId}.`);
+        } else {
+            // If ON CONFLICT (user_id, name) DO NOTHING occurred, fetch the existing project's ID.
+            const existingProjectRes = await dbClient.query(
+                'SELECT id FROM projects WHERE name = $1 AND user_id = $2',
+                [projectNameToCreate, userId]
+            );
+            if (existingProjectRes.rows.length === 0) {
+                // This should not happen if the INSERT ... ON CONFLICT logic is correct
+                // or if the project was truly supposed to be new.
+                throw new Error(`Failed to create or find project "${projectNameToCreate}" for user ${userId}.`);
+            }
+            projectId = existingProjectRes.rows[0].id;
+            console.log(`Default project "${projectNameToCreate}" (ID: ${projectId}) for user ${userId} already existed.`);
 
-    const initialMeta = {
-        projectName: actualProjectName,
-        rootPageId: rootPageId,
-        pages: {
-            [rootPageId]: {
-                id: rootPageId,
-                title: `👋 Welcome to Holy Grail!`, // Changed title
-                contentFile: `${rootPageId}.md`,
-                parentId: null,
-                childrenIds: [sidebarPageId, slashCommandsPageId, linkingSubpagesPageId, savingManagingPageId, fullCommandListPageId],
-                createdAt: now,
-                updatedAt: now,
-            },
-            [sidebarPageId]: {
-                id: sidebarPageId,
-                title: "Step 1: Exploring the Sidebar",
-                contentFile: `${sidebarPageId}.md`,
-                parentId: rootPageId,
-                childrenIds: [],
-                createdAt: now,
-                updatedAt: now,
-            },
-            [slashCommandsPageId]: {
-                id: slashCommandsPageId,
-                title: "Step 2: The Magic of Slash Commands",
-                contentFile: `${slashCommandsPageId}.md`,
-                parentId: rootPageId,
-                childrenIds: [],
-                createdAt: now,
-                updatedAt: now,
-            },
-            [linkingSubpagesPageId]: {
-                id: linkingSubpagesPageId,
-                title: "Step 3: Creating Subpages & Links",
-                contentFile: `${linkingSubpagesPageId}.md`,
-                parentId: rootPageId,
-                childrenIds: [],
-                createdAt: now,
-                updatedAt: now,
-            },
-            [savingManagingPageId]: {
-                id: savingManagingPageId,
-                title: "Step 4: Saving & Managing",
-                contentFile: `${savingManagingPageId}.md`,
-                parentId: rootPageId,
-                childrenIds: [],
-                createdAt: now,
-                updatedAt: now,
-            },
-            [fullCommandListPageId]: {
-                id: fullCommandListPageId,
-                title: "Full Command List",
-                contentFile: `${fullCommandListPageId}.md`,
-                parentId: rootPageId,
-                childrenIds: [],
-                createdAt: now,
-                updatedAt: now,
+            // Check if this specific tutorial root page already exists for this project
+            const rootCheck = await dbClient.query(
+                "SELECT id FROM pages WHERE project_id = $1 AND parent_id IS NULL AND title = $2",
+                [projectId, tutorialRootPageTitle]
+            );
+            if (rootCheck.rows.length > 0) {
+                console.log(`Default project "${projectNameToCreate}" for user ${userId} with tutorial root page "${tutorialRootPageTitle}" already initialized. Skipping content population.`);
+                return; // Successfully "initialized" by confirming existence
             }
         }
-    };
 
-    const rootPageContent = `
+        // 2. Define page titles (from user's file)
+        const sidebarPageTitle = "Step 1: Exploring the Sidebar";
+        const slashCommandsPageTitle = "Step 2: The Magic of Slash Commands";
+        const linkingSubpagesPageTitle = "Step 3: Creating Subpages & Links";
+        const savingManagingPageTitle = "Step 4: Saving & Managing";
+        const fullCommandListPageTitle = "Full Command List";
+
+        // 3. Insert pages to get their IDs (initially with placeholder content)
+        const insertPageAndGetId = async (title, parentId, displayOrder, tempContent = "Initializing...") => {
+            const res = await dbClient.query(
+                `INSERT INTO pages (project_id, title, markdown_content, parent_id, display_order)
+                 VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+                [projectId, title, tempContent, parentId, displayOrder]
+            );
+            return res.rows[0].id;
+        };
+
+        const rootPageId_db = await insertPageAndGetId(tutorialRootPageTitle, null, 0);
+        const sidebarPageId_db = await insertPageAndGetId(sidebarPageTitle, rootPageId_db, 0);
+        const slashCommandsPageId_db = await insertPageAndGetId(slashCommandsPageTitle, rootPageId_db, 1);
+        const linkingSubpagesPageId_db = await insertPageAndGetId(linkingSubpagesPageTitle, rootPageId_db, 2);
+        const savingManagingPageId_db = await insertPageAndGetId(savingManagingPageTitle, rootPageId_db, 3);
+        const fullCommandListPageId_db = await insertPageAndGetId(fullCommandListPageTitle, rootPageId_db, 4);
+
+        // 4. Define Page Content Templates (using placeholders for dynamic IDs)
+        // These are taken directly from the user-provided file content
+        const rootPageContentTemplate = `
 # 👋 Welcome to Holy Grail!
 
 Hello there! Welcome to Holy Grail, your new space to capture and organize your most important ideas – your personal "holy grails"!
@@ -100,7 +81,7 @@ Hello there! Welcome to Holy Grail, your new space to capture and organize your 
 We're excited to help you get started. This short, interactive tutorial will show you the basics in a few simple steps.
 
 **Ready to begin?**
-*   ➡️ Let's start with [Step 1: Exploring the Sidebar](page://${sidebarPageId}). You'll learn how to find your way around and organize your work.
+*   ➡️ Let's start with [Step 1: Exploring the Sidebar](page://{SIDEBAR_PAGE_ID}). You'll learn how to find your way around and organize your work.
 
 After that, we'll cover adding content, creating new pages, and more! These steps will guide you through:
 *   Using quick "Slash Commands" to add content.
@@ -108,10 +89,10 @@ After that, we'll cover adding content, creating new pages, and more! These step
 *   Saving and managing your work.
 
 **Want to see all the cool things you can do at a glance?**
-*   You can always check out the [Full Command List](page://${fullCommandListPageId}) for a quick reference.
+*   You can always check out the [Full Command List](page://{FULL_COMMAND_LIST_PAGE_ID}) for a quick reference.
 `;
 
-    const sidebarPageContent = `
+    const sidebarPageContentTemplate = `
 # Step 1: Exploring the Sidebar
 
 The sidebar is your main navigation area. Let's see how it works!
@@ -133,10 +114,10 @@ The sidebar is your main navigation area. Let's see how it works!
 
 **What's Next?**
 Feeling good about the sidebar? Great! Let's learn how to add content to your pages.
-➡️ Next up: [Step 2: The Magic of Slash Commands](page://${slashCommandsPageId})
+➡️ Next up: [Step 2: The Magic of Slash Commands](page://{SLASH_COMMANDS_PAGE_ID})
 `;
 
-    const slashCommandsPageContent = `
+    const slashCommandsPageContentTemplate = `
 # Step 2: The Magic of Slash Commands
 
 The easiest way to add and format content is with **Slash Commands**.
@@ -171,14 +152,14 @@ You should see how easy it is to structure your content! *Even this tutorial pag
 
 **Want to see everything you can do?**
 For a complete overview of all available commands:
-➡️ Dive deeper: [Full Command List](page://${fullCommandListPageId})
+➡️ Dive deeper: [Full Command List](page://{FULL_COMMAND_LIST_PAGE_ID})
 
 **Ready for another powerful command?**
 Let's learn how to create new pages *from within your text* and link them automatically.
-➡️ Next up: [Step 3: Creating Subpages & Links](page://${linkingSubpagesPageId})
+➡️ Next up: [Step 3: Creating Subpages & Links](page://{LINKING_SUBPAGES_PAGE_ID})
 `;
 
-    const linkingSubpagesPageContent = `
+    const linkingSubpagesPageContentTemplate = `
 # Step 3: Creating Subpages & Links
 
 A very handy feature is creating new subpages right as you're writing. This helps you build connected ideas easily.
@@ -215,10 +196,10 @@ You can also manually type links like this if you know a page's ID, but the \`/s
 
 **What's Next?**
 You're creating content and linking it like a pro! Let's cover how your work is saved and how to manage your pages.
-➡️ Next up: [Step 4: Saving & Managing](page://${savingManagingPageId})
+➡️ Next up: [Step 4: Saving & Managing](page://{SAVING_MANAGING_PAGE_ID})
 `;
 
-    const savingManagingPageContent = `
+    const savingManagingPageContentTemplate = `
 # Step 4: Saving & Managing Your Work
 
 Good news! Your work is generally taken care of for you.
@@ -250,11 +231,11 @@ You've now covered the basics of navigating, creating content, linking, saving, 
 
 Happy writing!
 
-Go back to the start: [👋 Welcome to Holy Grail!](page://${rootPageId})
-Or explore all commands: [Full Command List](page://${fullCommandListPageId})
+Go back to the start: [👋 Welcome to Holy Grail!](page://{ROOT_PAGE_ID})
+Or explore all commands: [Full Command List](page://{FULL_COMMAND_LIST_PAGE_ID})
 `;
 
-    const fullCommandListPageContent = `
+    const fullCommandListPageContentTemplate = `
 # Full Command List
 
 Here's a comprehensive list of all available slash commands. Remember to type \`/\` followed by the command or its short code.
@@ -291,26 +272,53 @@ Here's a comprehensive list of all available slash commands. Remember to type \`
 
 ---
 Back to:
-*   [👋 Welcome to Holy Grail!](page://${rootPageId})
-*   [Step 2: The Magic of Slash Commands](page://${slashCommandsPageId})
+*   [👋 Welcome to Holy Grail!](page://{ROOT_PAGE_ID})
+*   [Step 2: The Magic of Slash Commands](page://{SLASH_COMMANDS_PAGE_ID})
 `;
 
-    // Helper to write files
-    const writePage = async (id, content) => {
-        await fsPromises.writeFile(path.join(pagesDir, `${id}.md`), content.trim(), 'utf-8');
-    };
+        // 5. Prepare final content by replacing placeholders with actual DB-generated IDs
+        const finalRootPageContent = rootPageContentTemplate
+            .replace(/{SIDEBAR_PAGE_ID}/g, sidebarPageId_db)
+            .replace(/{FULL_COMMAND_LIST_PAGE_ID}/g, fullCommandListPageId_db);
 
-    await writePage(rootPageId, rootPageContent);
-    await writePage(sidebarPageId, sidebarPageContent);
-    await writePage(slashCommandsPageId, slashCommandsPageContent);
-    await writePage(linkingSubpagesPageId, linkingSubpagesPageContent);
-    await writePage(savingManagingPageId, savingManagingPageContent);
-    await writePage(fullCommandListPageId, fullCommandListPageContent);
+        const finalSidebarPageContent = sidebarPageContentTemplate
+            .replace(/{SLASH_COMMANDS_PAGE_ID}/g, slashCommandsPageId_db);
 
-    await writeProjectMeta(projectPath, initialMeta);
+        const finalSlashCommandsPageContent = slashCommandsPageContentTemplate
+            .replace(/{FULL_COMMAND_LIST_PAGE_ID}/g, fullCommandListPageId_db)
+            .replace(/{LINKING_SUBPAGES_PAGE_ID}/g, linkingSubpagesPageId_db);
 
-    console.log(`Created interactive "Welcome" project with a friendlier tutorial and full command list using JSON structure.`);
+        const finalLinkingSubpagesPageContent = linkingSubpagesPageContentTemplate
+            .replace(/{SAVING_MANAGING_PAGE_ID}/g, savingManagingPageId_db);
+
+        const finalSavingManagingPageContent = savingManagingPageContentTemplate
+            .replace(/{ROOT_PAGE_ID}/g, rootPageId_db)
+            .replace(/{FULL_COMMAND_LIST_PAGE_ID}/g, fullCommandListPageId_db);
+
+        const finalFullCommandListPageContent = fullCommandListPageContentTemplate
+            .replace(/{ROOT_PAGE_ID}/g, rootPageId_db)
+            .replace(/{SLASH_COMMANDS_PAGE_ID}/g, slashCommandsPageId_db);
+
+        // 6. Update pages in DB with their final, link-populated content
+        const updatePageContentInDb = async (pageId, content) => {
+            await dbClient.query('UPDATE pages SET markdown_content = $1 WHERE id = $2', [content.trim(), pageId]);
+        };
+
+        await updatePageContentInDb(rootPageId_db, finalRootPageContent);
+        await updatePageContentInDb(sidebarPageId_db, finalSidebarPageContent);
+        await updatePageContentInDb(slashCommandsPageId_db, finalSlashCommandsPageContent);
+        await updatePageContentInDb(linkingSubpagesPageId_db, finalLinkingSubpagesPageContent);
+        await updatePageContentInDb(savingManagingPageId_db, finalSavingManagingPageContent);
+        await updatePageContentInDb(fullCommandListPageId_db, finalFullCommandListPageContent);
+
+        console.log(`Default project "${projectNameToCreate}" for user ${userId} with tutorial "${tutorialRootPageTitle}" fully initialized in DB.`);
+
+    } catch (error) {
+        console.error(`Error initializing default project "${projectNameToCreate}" for user ${userId} (tutorial: "${tutorialRootPageTitle}") in DB:`, error);
+        // Re-throw so the calling transaction can be rolled back
+        throw error;
+    }
+    // No client.release() or transaction management here, handled by caller.
 }
 
 module.exports = { initializeDefaultProject };
-// --- END OF FILE defaultProjectInitializer.js ---

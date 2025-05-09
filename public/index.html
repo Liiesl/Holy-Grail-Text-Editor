@@ -5,35 +5,84 @@
    <meta name="viewport" content="width=device-width, initial-scale=1.0">
    <title>Holy Grail Type Editor</title>
    <link rel="stylesheet" href="style.css">
-   <link rel="stylesheet" href="/SCMD/slashCommand.css"> <!-- This actually contains improved-slashCommand.css -->
+   <link rel="stylesheet" href="auth.css"> <!-- ADDED THIS LINE -->
+   <link rel="stylesheet" href="/SCMD/slashCommand.css">
    <link rel="stylesheet" href="sidebar.css">
    <link rel="stylesheet" href="textStyleModal.css">
    <link rel="stylesheet" href="/SCMD/embedPageModal.css">
-   <link rel="stylesheet" href="/SCMD/emojiModal.css"> <!-- Added for Emoji Modal -->
+   <link rel="stylesheet" href="/SCMD/emojiModal.css">
+   <link rel="stylesheet" href="userSettingsModal.css">
    <script src="https://cdnjs.cloudflare.com/ajax/libs/turndown/7.0.0/turndown.js"></script>
    <script src="https://cdnjs.cloudflare.com/ajax/libs/showdown/2.1.0/showdown.min.js"></script>
    <script src="https://cdnjs.cloudflare.com/ajax/libs/diff_match_patch/20121119/diff_match_patch.js"></script>
    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+   <style>
+       /* Basic Auth Form Styles REMOVED FROM HERE */
+       
+       .app-header { padding: 10px; background-color: #f0f0f0; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; }
+       #logged-in-user { font-size: 0.9em; }
+       #logout-btn { padding: 5px 10px; font-size: 0.9em; background-color: #e0e0e0; border: 1px solid #ccc; cursor: pointer;}
+   </style>
 </head>
 <body>
-   <div class="container">
-       <aside class="sidebar">
-           <!-- Projects H2 and page tree will be populated by sidePanel.js -->
-           <div id="projects-heading-container">
-               <!-- H2 with actions will go here -->
-           </div>
-           <div id="page-tree">
-               <!-- Project list and page trees will be populated here -->
-           </div>
-       </aside>
-       <main class="editor-area">
-           <h3 id="current-page-display">No page selected</h3>
-           <div class="editor-panes">
-               <div id="live-editor" contenteditable="true" class="pane" data-placeholder="Write here... Type '/' for commands."></div>
-           </div>
-           <button id="save-page-btn" disabled>Save Changes</button>
-           <p id="status-message"></p>
-       </main>
+    <div id="auth-container">
+        <h2>Login / Register</h2> <!-- style="text-align:center;" removed -->
+        <div id="auth-status-message"></div>
+        <form id="login-form" class="auth-form">
+            <h3>Login</h3>
+            <div class="form-group">
+                <label for="login-username">Username</label>
+                <input type="text" id="login-username" name="username" placeholder="e.g. johndoe" required>
+            </div>
+            <div class="form-group">
+                <label for="login-password">Password</label>
+                <input type="password" id="login-password" name="password" placeholder="••••••••" required>
+            </div>
+            <button type="submit">Login</button>
+            <p class="auth-toggle-link">Don't have an account? <a href="#" id="show-register-link">Register here</a></p>
+        </form>
+        <form id="register-form" class="auth-form" style="display:none;"> <!-- style="display:none;" is fine as JS controls it -->
+            <h3>Register</h3>
+            <div class="form-group">
+                <label for="register-username">Username</label>
+                <input type="text" id="register-username" name="username" placeholder="Choose a username" required>
+            </div>
+            <div class="form-group">
+                <label for="register-email">Email</label>
+                <input type="email" id="register-email" name="email" placeholder="e.g. user@example.com" required>
+            </div>
+            <div class="form-group">
+                <label for="register-password">Password</label>
+                <input type="password" id="register-password" name="password" placeholder="Create a strong password" required>
+            </div>
+            <button type="submit">Register</button>
+            <p class="auth-toggle-link">Already have an account? <a href="#" id="show-login-link">Login here</a></p>
+        </form>
+    </div>
+
+   <div id="app-container" class="container" style="display:none;">
+        <div class="container">
+            <aside class="sidebar">
+                <div id="user-profile-area-container"></div>
+                <!-- Projects H2 and page tree will be populated by sidePanel.js -->
+                <div id="projects-heading-container">
+                    <!-- H2 with actions will go here -->
+                </div>
+                <div id="page-tree">
+                    <!-- Project list and page trees will be populated here -->
+                </div>
+            </aside>
+            <main class="editor-area">
+                <div class="editor-top-bar">
+                    <h4 id="current-page-display">No page selected</h4>
+                    <p id="status-message"></p>
+                    <button id="save-page-btn" disabled><i class="fas fa-save"></i></button>
+                </div>
+                <div class="editor-panes">
+                    <div id="live-editor" contenteditable="true" class="pane" data-placeholder="Write here... Type '/' for commands."></div>
+                </div>
+            </main>
+        </div>
    </div>
 
    <!-- Slash Command Modal -->

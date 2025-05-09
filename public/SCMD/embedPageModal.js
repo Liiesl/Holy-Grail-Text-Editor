@@ -3,6 +3,7 @@
 export function initEmbedPageModal(appContext) {
     const {
         showStatus,
+        fetchWithAuth // Ensure fetchWithAuth is available from appContext
     } = appContext;
 
     let modal = document.getElementById('embed-page-modal-dynamic');
@@ -179,7 +180,8 @@ export function initEmbedPageModal(appContext) {
             }
         }).catch(err => {
             console.error("Error during loadCurrentProjectTreeIntoModal or initial filter:", err);
-            embedPageTreeContainer.innerHTML = `<p class="embed-error-message">Error loading page list: ${err.message}</p>`;
+            // Error message already shown by loadCurrentProjectTreeIntoModal's catch, or by fetchWithAuth
+            // embedPageTreeContainer.innerHTML = `<p class="embed-error-message">Error loading page list: ${err.message}</p>`;
         });
     };
 
@@ -233,12 +235,13 @@ export function initEmbedPageModal(appContext) {
 
         projectPagesDiv.innerHTML = '<li class="embed-loading-message" style="padding-left: 15px; list-style: none;">Loading pages...</li>';
         try {
-            const response = await fetch(`/api/project/${currentProject}/tree`);
+            const response = await fetchWithAuth(`/api/project/${currentProject}/tree`); // Use fetchWithAuth
             if (!response.ok) {
-                 const errData = await response.json().catch(() => ({}));
+                 // fetchWithAuth handles 401/403. This handles other non-OK responses.
+                 const errData = await response.json().catch(() => ({error: `Server error ${response.status}`}));
                  if (response.status === 404 && errData.error && errData.error.toLowerCase().includes("root page") && errData.error.toLowerCase().includes("not found")) {
                     projectPagesDiv.innerHTML = '<li class="embed-no-results-message" style="padding-left: 15px; list-style: none;">Project is empty.</li>';
-                    return;
+                    return; // Return to prevent further processing and error display
                  }
                 throw new Error(errData.error || `HTTP error! status: ${response.status}`);
             }
@@ -266,8 +269,12 @@ export function initEmbedPageModal(appContext) {
             projectPagesDiv.appendChild(pageListRootUl);
 
         } catch (error) {
+            // This catch block will handle errors thrown by fetchWithAuth (e.g. auth failure),
+            // or by the !response.ok check above.
             console.error(`Error fetching page tree for ${currentProject} in embed modal:`, error);
             projectPagesDiv.innerHTML = `<li class="embed-error-message" style="padding-left: 15px; list-style: none;">Error loading pages: ${error.message}</li>`;
+            // If fetchWithAuth shows login, this status is for a logged-out user.
+            // If it's another error, it's a relevant operational error.
             if (showStatus) showStatus(`Failed to load tree for ${currentProject}: ${error.message}`, 'error');
         }
     }

@@ -4,3 +4,4 @@ projects/*
 !projects/.gitkeep
 note
 .git
+.env

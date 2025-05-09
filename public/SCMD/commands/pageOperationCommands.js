@@ -12,7 +12,7 @@ export const createSubpageCommand = {
         return !!(appContext.currentProject && appContext.currentPageState);
     },
     execute: async (appContext, { selection, range }) => {
-        const { liveEditor, showStatus, currentProject, currentPageState, fetchPageTree } = appContext;
+        const { liveEditor, showStatus, currentProject, currentPageState, fetchPageTree, fetchWithAuth } = appContext;
 
         if (!currentProject || !currentPageState) {
             showStatus('Cannot create subpage: No parent page loaded.', 'error');
@@ -25,13 +25,15 @@ export const createSubpageCommand = {
         }
 
         try {
-            const response = await fetch(`/api/project/${currentProject}/pages`, {
+            const response = await fetchWithAuth(`/api/project/${currentProject}/pages`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json' }, // fetchWithAuth will add Auth header
                 body: JSON.stringify({ title: subpageTitle.trim(), parentId: currentPageState.id })
             });
 
             if (!response.ok) {
+                // fetchWithAuth handles 401/403 by throwing and showing login.
+                // This handles other server errors (400, 404, 500 etc.)
                 const errData = await response.json().catch(() => ({ error: 'Unknown server error' }));
                 throw new Error(errData.error || `HTTP error! status: ${response.status}`);
             }
@@ -44,7 +46,7 @@ export const createSubpageCommand = {
                 sel.addRange(range);
             }
             
-            const linkHTML = `<a href="page://${result.newPageId}">${result.title}</a>&nbsp;`; // use &nbsp;
+            const linkHTML = `<a href="page://${result.newPageId}">${result.title}</a> `; // use  
             document.execCommand('insertHTML', false, linkHTML);
             
             showStatus(`Subpage "${result.title}" created and linked.`, 'success');
@@ -54,7 +56,11 @@ export const createSubpageCommand = {
             }
             return true; // Command succeeded, allow default cleanup.
         } catch (error) {
+            // This will catch errors from fetchWithAuth (e.g. auth failure)
+            // or from the !response.ok check above.
             console.error('Error creating subpage via slash command:', error);
+            // If fetchWithAuth showed login, this status might be for a logged-out user, which is fine.
+            // If it's another error, it's relevant.
             showStatus(`Failed to create subpage: ${error.message}`, 'error');
             return true; // Error occurred, but allow default cleanup.
         }
@@ -99,7 +105,7 @@ export const embedPageCommand = {
                             // and this range is now where the link should be inserted.
                         }
 
-                        const linkHTML = `<a href="page://${selectedPage.pageId}">${selectedPage.pageTitle}</a>&nbsp;`;
+                        const linkHTML = `<a href="page://${selectedPage.pageId}">${selectedPage.pageTitle}</a> `;
                         document.execCommand('insertHTML', false, linkHTML);
                         liveEditor.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
                     }

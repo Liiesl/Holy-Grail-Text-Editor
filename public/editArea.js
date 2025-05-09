@@ -3,7 +3,7 @@ let DmpInstance = null;
 if (typeof diff_match_patch === 'function') {
     DmpInstance = new diff_match_patch();
 } else {
-    console.warn("diff_match_patch library not loaded. Differential saving disabled; will use full content saves.");
+    console.warn("diff_match_patch library not loaded. Differential saving disabled.");
 }
 
 // Client-side SHA256 helper (async)
@@ -34,10 +34,10 @@ export function initEditArea(appContext) {
     } = appContext;
 
     const clientConverter = new showdown.Converter();
-    clientConverter.setOption('tables', true); // Enable table parsing for Showdown
+    clientConverter.setOption('tables', true);
 
-    // --- Internal Save Logic ---
     async function _savePageContent(isAutosave = false, preparedSaveData = null) {
+        // ... (existing initial checks for currentPageState, currentProject) ...
         if (!appContext.currentPageState || !appContext.currentProject) {
             if (!isAutosave) showStatus('No page selected or project loaded.', 'error');
             else if (isAutosave && appContext.statusMessage.textContent === 'Autosaving...') {
@@ -51,7 +51,7 @@ export function initEditArea(appContext) {
 
         let mode = 'full'; 
         let requestBodyPayload;
-        let targetMarkdownForStateUpdate; 
+        let targetMarkdownForStateUpdate;
 
         if (isAutosave && preparedSaveData) {
             targetMarkdownForStateUpdate = preparedSaveData.targetMarkdown;
@@ -110,11 +110,7 @@ export function initEditArea(appContext) {
 
         appContext.isSaving = true;
         if (appContext.updateSaveButtonState) appContext.updateSaveButtonState();
-        
-        if (appContext.autosaveTimeoutId) {
-            clearTimeout(appContext.autosaveTimeoutId);
-            appContext.autosaveTimeoutId = null;
-        }
+        if (appContext.autosaveTimeoutId) clearTimeout(appContext.autosaveTimeoutId);
         
         try {
             if (!isAutosave) {
@@ -124,10 +120,11 @@ export function initEditArea(appContext) {
                     showStatus(`Autosaving (${mode})...`, 'info', 0);
                 }
             }
-
-            const response = await fetch(`/api/project/${projectBeingSaved}/page/${pageIdBeingSaved}`, {
+            
+            // USE appContext.fetchWithAuth instead of fetch
+            const response = await appContext.fetchWithAuth(`/api/project/${appContext.currentProject}/page/${appContext.currentPageState.id}`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                // headers already handled by fetchWithAuth if body is present
                 body: JSON.stringify(requestBodyPayload)
             });
 
@@ -142,13 +139,14 @@ export function initEditArea(appContext) {
             }
 
             if (!response.ok)  {
-                 const errData = await response.json();
+                 const errData = await response.json().catch(() => ({}));
                  throw new Error(errData.error || `HTTP error! status: ${response.status}`);
             }
             const result = await response.json(); 
             
-            if (appContext.currentPageState && appContext.currentPageState.id === pageIdBeingSaved && appContext.currentProject === projectBeingSaved) {
-                showStatus(isAutosave ? 'All changes saved.' : (result.message || 'Page saved!'), 'success', isAutosave ? 2000: 2500);
+            // ... (update appContext.currentPageState, UI, hasUnsavedChanges based on result) ...
+             if (appContext.currentPageState && appContext.currentPageState.id === pageIdBeingSaved && appContext.currentProject === projectBeingSaved) {
+                appContext.showStatus(isAutosave ? 'All changes saved.' : (result.message || 'Page saved!'), 'success', isAutosave ? 2000: 2500);
             
                 appContext.currentPageState.originalMarkdown = result.newMarkdown;
                 appContext.currentPageState.versionHash = result.newVersionHash;
@@ -156,7 +154,7 @@ export function initEditArea(appContext) {
                 if (result.newTitle && result.newTitle !== appContext.currentPageState.title) {
                     appContext.currentPageState.title = result.newTitle;
                     currentPageDisplay.textContent = `${appContext.currentProject} / ${result.newTitle}`;
-                    if (appContext.fetchPageTree) {
+                    if (appContext.fetchPageTree) { // Check if function exists
                         await appContext.fetchPageTree(appContext.currentProject, appContext.currentPageState.id); 
                     }
                 }
@@ -173,13 +171,17 @@ export function initEditArea(appContext) {
                 console.log(`Save successful for ${projectBeingSaved}/${pageIdBeingSaved}, but page context has changed. UI not updated for that save.`);
             }
             return true;
+
         } catch (error) {
-            console.error('Error saving page:', error);
-            if (appContext.currentPageState && appContext.currentPageState.id === pageIdBeingSaved && appContext.currentProject === projectBeingSaved) {
-                showStatus(`Failed to save page. ${error.message}`, 'error', 5000);
-            } else {
-                console.error(`Error saving page ${projectBeingSaved}/${pageIdBeingSaved} (context changed): ${error.message}`);
+            // fetchWithAuth might throw for 401/403, which means user is logged out.
+            // No need to show "Failed to save page" if it's an auth error handled by fetchWithAuth.
+            if (error.message && !error.message.toLowerCase().includes('auth error')) {
+                console.error('Error saving page:', error);
+                if (appContext.currentPageState && appContext.currentPageState.id === pageIdBeingSaved && appContext.currentProject === projectBeingSaved) {
+                    showStatus(`Failed to save page. ${error.message}`, 'error', 5000);
+                }
             }
+             // Update hasUnsavedChanges based on current content vs original
             const checkAfterFailHtml = liveEditor.innerHTML;
             const checkAfterFailMarkdown = htmlToMarkdown(checkAfterFailHtml);
             if (appContext.currentPageState && checkAfterFailMarkdown !== appContext.currentPageState.originalMarkdown) {
@@ -189,11 +191,11 @@ export function initEditArea(appContext) {
             }
             return false;
         } finally {
-            appContext.isSaving = false; 
+            // ... (reset appContext.isSaving, updateSaveButtonState, scheduleAutosave if needed) ...
+             appContext.isSaving = false; 
             if (appContext.currentPageState && appContext.currentPageState.id === pageIdBeingSaved && appContext.currentProject === projectBeingSaved) {
                 if (appContext.updateSaveButtonState) appContext.updateSaveButtonState();
-                
-                if (appContext.hasUnsavedChanges && appContext.scheduleAutosave) {
+                if (appContext.hasUnsavedChanges && appContext.scheduleAutosave) { // Check if functions exist
                     appContext.scheduleAutosave(); 
                 }
             }
@@ -269,18 +271,17 @@ export function initEditArea(appContext) {
         await _savePageContent(true, preparedSaveData);
     };
 
-    appContext.clearEditor = () => {
+    appContext.clearEditor = (fullClear = false) => {
         liveEditor.innerHTML = '';
         currentPageDisplay.textContent = 'No page selected';
-        if (appContext.currentProject) {
+        if (appContext.currentProject && !fullClear) {
             currentPageDisplay.textContent = `Project: ${appContext.currentProject} - No page selected`;
+        } else if (fullClear) {
+            appContext.currentProject = null; // Ensure project is cleared on fullClear
         }
         appContext.currentPageState = null; 
         appContext.hasUnsavedChanges = false;
-        if (appContext.autosaveTimeoutId) {
-            clearTimeout(appContext.autosaveTimeoutId);
-            appContext.autosaveTimeoutId = null;
-        }
+        if (appContext.autosaveTimeoutId) clearTimeout(appContext.autosaveTimeoutId);
         if (appContext.updateSaveButtonState) appContext.updateSaveButtonState();
         liveEditor.dataset.placeholder = "Type '/' for commands, or start writing...";
         liveEditor.classList.add('is-empty'); 
@@ -297,13 +298,16 @@ export function initEditArea(appContext) {
 
         try {
             showStatus(`Loading page: ${pageId}...`, 'info', 0);
-            const response = await fetch(`/api/project/${projectName}/page/${pageId}`);
+            // USE appContext.fetchWithAuth
+            const response = await appContext.fetchWithAuth(`/api/project/${projectName}/page/${pageId}`);
+            // ... (check response.ok, parse data) ...
             if (!response.ok) {
-                 const errData = await response.json();
+                 const errData = await response.json().catch(() => ({}));
                  throw new Error(errData.error || `HTTP error! status: ${response.status}`);
             }
             const data = await response.json(); 
-            
+            appContext.currentProject = projectName; 
+            // ... (update appContext.currentPageState, liveEditor.innerHTML, UI, hasUnsavedChanges) ...
             appContext.currentPageState = { 
                 id: data.id, 
                 originalMarkdown: data.markdown,
@@ -312,17 +316,12 @@ export function initEditArea(appContext) {
             };
             liveEditor.innerHTML = clientConverter.makeHtml(data.markdown);
             
-            if (liveEditor.innerHTML.trim() === '') {
-                 liveEditor.classList.add('is-empty');
-                 liveEditor.dispatchEvent(new Event('focus')); 
-            } else {
-                 liveEditor.classList.remove('is-empty');
-                 liveEditor.removeAttribute('data-placeholder'); 
-            }
+            if (liveEditor.innerHTML.trim() === '') liveEditor.classList.add('is-empty');
+            else liveEditor.classList.remove('is-empty');
 
             currentPageDisplay.textContent = `${projectName} / ${data.title || data.id}`;
             appContext.hasUnsavedChanges = false; 
-            if (appContext.updateSaveButtonState) appContext.updateSaveButtonState();
+            if (appContext.updateSaveButtonState) appContext.updateSaveButtonState(); // Check exists
             showStatus(`Loaded page: ${data.title || data.id}`, 'success', 1500);
  
             document.querySelectorAll('#page-tree .active-page').forEach(el => el.classList.remove('active-page'));
@@ -333,18 +332,18 @@ export function initEditArea(appContext) {
                     activeLi.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                 }
             }
- 
+
         } catch (error) {
-            console.error('Error loading page content:', error);
-            showStatus(`Failed to load page: ${pageId}. ${error.message}`, 'error');
-            if (appContext.clearEditor) appContext.clearEditor(); 
+             if (error.message && !error.message.toLowerCase().includes('auth error')) {
+                console.error('Error loading page content:', error);
+                showStatus(`Failed to load page: ${pageId}. ${error.message}`, 'error');
+             }
+            if (appContext.clearEditor) appContext.clearEditor(); // This will now use fullClear = false by default
             if (projectName) currentPageDisplay.textContent = `Project: ${projectName} - Error loading page.`;
         }
     };
 
-    appContext.savePage = async () => { 
-        await _savePageContent(false, null); 
-    };
+    appContext.savePage = async () => { await _savePageContent(false, null); };
 
     // --- Event Listeners ---
     liveEditor.addEventListener('input', (e) => {

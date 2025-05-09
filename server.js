@@ -1,156 +1,100 @@
 const express = require('express');
-const fs = require('fs').promises;
-const fssync = require('fs'); // For some sync operations
 const path = require('path');
 const showdown = require('showdown');
-const { v4: uuidv4 } = require('uuid'); // For generating unique page IDs
 const crypto = require('crypto');
 const DiffMatchPatch = require('diff-match-patch');
+const fssync = require('fs');
 
-const { initializeDefaultProject } = require('./defaultProjectInitializer'); // Import the function
+const db = require('./db');
+require('dotenv').config(); // Configures .env for the whole application
+
+// Auth related functionalities are now imported from auth.js
+const { authRouter, authenticateToken } = require('./auth'); 
+// initializeDefaultProject is used within auth.js, so no need to import here directly if not used elsewhere in server.js
 
 const dmp = new DiffMatchPatch();
-
 const app = express();
-const port = 3133;
-const PROJECTS_DIR = path.join(__dirname, 'projects');
+const port = process.env.PORT || 3133;
 const PUBLIC_DIR = path.join(__dirname, 'public');
-
-const META_FILE_NAME = '_project_meta.json';
-const PAGES_DIR_NAME = '_pages';
-
 const converter = new showdown.Converter();
 
-// Middleware
-app.use(express.json({ limit: '5mb' })); // Increased limit for potentially larger patches/content
+app.use(express.json({ limit: '5mb' }));
 app.use(express.static(PUBLIC_DIR));
 
-// --- Helper Functions ---
+// Register auth routes from auth.js
+app.use('/api/auth', authRouter);
+
 function calculateHash(text) {
     if (text === null || typeof text === 'undefined') return null;
     return crypto.createHash('sha256').update(text, 'utf8').digest('hex');
 }
 
-async function readProjectMeta(projectPath) {
-    const metaFilePath = path.join(projectPath, META_FILE_NAME);
-    try {
-        const data = await fs.readFile(metaFilePath, 'utf-8');
-        return JSON.parse(data);
-    } catch (error) {
-        if (error.code === 'ENOENT') {
-            console.error(`Meta file not found for project: ${projectPath}.`);
-            throw new Error(`Project metadata not found for ${path.basename(projectPath)}.`);
-        }
-        console.error(`Error reading or parsing meta file ${metaFilePath}:`, error);
-        throw error;
-    }
-}
-
-async function writeProjectMeta(projectPath, metaData) {
-    const metaFilePath = path.join(projectPath, META_FILE_NAME);
-    await fs.writeFile(metaFilePath, JSON.stringify(metaData, null, 2), 'utf-8');
-}
-
-function buildTreeFromMeta(meta, parentId = null) {
+function buildTree(pages, parentId = null) {
     const tree = [];
-    const parentPage = meta.pages[parentId];
-    if (!parentPage || !parentPage.childrenIds) {
-        return tree;
-    }
-    parentPage.childrenIds.forEach(childId => {
-        const page = meta.pages[childId];
-        if (page && page.parentId === parentId) {
-            const children = buildTreeFromMeta(meta, page.id);
+    pages
+        .filter(page => page.parent_id === parentId)
+        .sort((a, b) => a.display_order - b.display_order)
+        .forEach(page => {
+            const children = buildTree(pages, page.id);
             tree.push({
                 id: page.id,
                 title: page.title,
                 type: 'page',
                 children: children,
             });
-        }
-    });
+        });
     return tree;
 }
 
-async function deletePageRecursive(meta, pageIdToDelete, projectPagesPath) {
-    const pageInfoToDelete = meta.pages[pageIdToDelete];
-    if (!pageInfoToDelete) return; // Already deleted or never existed
-
-    // Recursively delete children
-    if (pageInfoToDelete.childrenIds && pageInfoToDelete.childrenIds.length > 0) {
-        // Create a copy of childrenIds array because it might be modified during recursion
-        const childrenToDelete = [...pageInfoToDelete.childrenIds];
-        for (const childId of childrenToDelete) {
-            await deletePageRecursive(meta, childId, projectPagesPath);
-        }
-    }
-
-    // Delete content file
-    const contentFilePath = path.join(projectPagesPath, pageInfoToDelete.contentFile);
-    try {
-        await fs.unlink(contentFilePath);
-        console.log(`Deleted content file: ${contentFilePath}`);
-    } catch (err) {
-        if (err.code !== 'ENOENT') { // Ignore if file already not found
-            console.error(`Error deleting content file ${contentFilePath}:`, err);
-            throw err; // Rethrow if it's a more serious error
-        }
-    }
-
-    // Remove from parent's childrenIds
-    const parentId = pageInfoToDelete.parentId;
-    if (parentId && meta.pages[parentId] && meta.pages[parentId].childrenIds) {
-        meta.pages[parentId].childrenIds = meta.pages[parentId].childrenIds.filter(id => id !== pageIdToDelete);
-    }
+async function duplicatePageRecursiveDb(originalPageId, newProjectId, newParentIdForDuplicatedPage, displayOrder, dbClient, duplicatedIdMap = {}) {
+    const pageRes = await dbClient.query('SELECT * FROM pages WHERE id = $1', [originalPageId]);
+    if (pageRes.rows.length === 0) return null;
+    const originalPageInfo = pageRes.rows[0];
+    const newPageTitle = `${originalPageInfo.title} (Copy)`;
     
-    // Delete from meta
-    delete meta.pages[pageIdToDelete];
-    console.log(`Deleted page ${pageIdToDelete} from meta.`);
-}
-
-
-async function duplicatePageRecursive(meta, originalPageId, newParentIdForDuplicatedPage, projectPagesPath, allNewPageMetas, duplicatedIdMap, now) {
-    const originalPageInfo = meta.pages[originalPageId];
-    if (!originalPageInfo) return null;
-
-    const newPageId = uuidv4();
+    const newPageInsertRes = await dbClient.query(
+        `INSERT INTO pages (project_id, title, markdown_content, parent_id, display_order, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+         RETURNING id`,
+        [newProjectId, newPageTitle, originalPageInfo.markdown_content, newParentIdForDuplicatedPage, displayOrder]
+    );
+    const newPageId = newPageInsertRes.rows[0].id;
     duplicatedIdMap[originalPageId] = newPageId;
 
-    const newPageContentFileName = `${newPageId}.md`;
-    const newPageInfo = {
-        ...originalPageInfo, // Copy most fields
-        id: newPageId,
-        title: `${originalPageInfo.title} (Copy)`,
-        contentFile: newPageContentFileName,
-        parentId: newParentIdForDuplicatedPage,
-        childrenIds: [], // Will be populated by recursive calls
-        createdAt: now,
-        updatedAt: now,
-    };
-    allNewPageMetas[newPageId] = newPageInfo;
-
-    // Copy content file
-    const originalContentPath = path.join(projectPagesPath, originalPageInfo.contentFile);
-    const newContentPath = path.join(projectPagesPath, newPageContentFileName);
-    await fs.copyFile(originalContentPath, newContentPath);
-
-    // Recursively duplicate children
-    if (originalPageInfo.childrenIds && originalPageInfo.childrenIds.length > 0) {
-        for (const originalChildId of originalPageInfo.childrenIds) {
-            const newChildId = await duplicatePageRecursive(meta, originalChildId, newPageId, projectPagesPath, allNewPageMetas, duplicatedIdMap, now);
-            if (newChildId) {
-                newPageInfo.childrenIds.push(newChildId);
-            }
+    const childrenRes = await dbClient.query(
+        'SELECT id FROM pages WHERE parent_id = $1 ORDER BY display_order ASC',
+        [originalPageId]
+    );
+    
+    let childDisplayOrder = 0;
+    for (const child of childrenRes.rows) {
+        await duplicatePageRecursiveDb(child.id, newProjectId, newPageId, childDisplayOrder++, dbClient, duplicatedIdMap);
+    }
+    
+    let currentMarkdownForNewPage = originalPageInfo.markdown_content; 
+    if (currentMarkdownForNewPage) {
+        let finalMarkdownForNewPage = currentMarkdownForNewPage;
+        for (const [oId, nId] of Object.entries(duplicatedIdMap)) {
+             const linkRegexSafe = oId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+             const linkRegex = new RegExp(`(page:\\/\\/)${linkRegexSafe}`, 'g');
+             finalMarkdownForNewPage = finalMarkdownForNewPage.replace(linkRegex, `$1${nId}`);
+        }
+        if (finalMarkdownForNewPage !== currentMarkdownForNewPage) {
+            await dbClient.query('UPDATE pages SET markdown_content = $1 WHERE id = $2', [finalMarkdownForNewPage, newPageId]);
         }
     }
     return newPageId;
 }
 
+// --- Auth API Endpoints ---
+// MOVED to auth.js
 
-// --- API Endpoints ---
-
-app.post('/api/projects', async (req, res) => {
+// --- Project API Endpoints (Protected) ---
+// authenticateToken is now imported from ./auth
+app.post('/api/projects', authenticateToken, async (req, res) => {
     const { projectName } = req.body;
+    const userId = req.user.id;
+
     if (!projectName || typeof projectName !== 'string' || projectName.trim() === '') {
         return res.status(400).json({ error: 'Valid project name is required.' });
     }
@@ -159,291 +103,299 @@ app.post('/api/projects', async (req, res) => {
         return res.status(400).json({ error: 'Invalid characters in project name.' });
     }
 
-    const projectPath = path.join(PROJECTS_DIR, trimmedProjectName);
-
+    const client = await db.getClient();
     try {
-        if (fssync.existsSync(projectPath)) {
-            return res.status(409).json({ error: `Project "${trimmedProjectName}" already exists.` });
+        await client.query('BEGIN');
+        const existingProject = await client.query('SELECT id FROM projects WHERE name = $1 AND user_id = $2', [trimmedProjectName, userId]);
+        if (existingProject.rows.length > 0) {
+            await client.query('ROLLBACK');
+            return res.status(409).json({ error: `Project "${trimmedProjectName}" already exists for this user.` });
         }
-        fssync.mkdirSync(projectPath, { recursive: true });
-        await initializeNewProject(projectPath, trimmedProjectName);
+
+        const projectRes = await client.query(
+            'INSERT INTO projects (name, user_id) VALUES ($1, $2) RETURNING id',
+            [trimmedProjectName, userId]
+        );
+        const projectId = projectRes.rows[0].id;
+
+        const rootPageTitle = `Welcome to ${trimmedProjectName}`;
+        const rootPageContent = `# ${rootPageTitle}\n\nStart building your project!`;
+        await client.query(
+            `INSERT INTO pages (project_id, title, markdown_content, parent_id, display_order)
+             VALUES ($1, $2, $3, NULL, 0)`,
+            [projectId, rootPageTitle, rootPageContent]
+        );
+
+        await client.query('COMMIT');
         res.status(201).json({ message: `Project "${trimmedProjectName}" created successfully.`, projectName: trimmedProjectName });
     } catch (error) {
-        console.error(`Error creating project ${trimmedProjectName}:`, error);
+        await client.query('ROLLBACK');
+        console.error(`Error creating project ${trimmedProjectName} for user ${userId}:`, error);
+        if (error.code === '23505' && error.constraint === 'projects_user_id_name_key') { 
+             return res.status(409).json({ error: `Project "${trimmedProjectName}" already exists for this user.` });
+        }
         res.status(500).json({ error: `Failed to create project: ${error.message}` });
+    } finally {
+        client.release();
     }
 });
 
-
-app.get('/api/projects', async (req, res) => {
+app.get('/api/projects', authenticateToken, async (req, res) => {
+    const userId = req.user.id;
     try {
-        const entries = await fs.readdir(PROJECTS_DIR, { withFileTypes: true });
-        const projectNames = entries
-            .filter(dirent => {
-                if (!dirent.isDirectory()) return false;
-                const metaFilePath = path.join(PROJECTS_DIR, dirent.name, META_FILE_NAME);
-                return fssync.existsSync(metaFilePath);
-            })
-            .map(dirent => dirent.name);
-        res.json(projectNames);
+        const result = await db.query('SELECT name FROM projects WHERE user_id = $1 ORDER BY name ASC', [userId]);
+        res.json(result.rows.map(row => row.name));
     } catch (error) {
-        console.error('Error listing projects:', error);
+        console.error(`Error listing projects for user ${userId}:`, error);
         res.status(500).json({ error: 'Failed to list projects' });
     }
 });
 
-app.get('/api/project/:projectName/tree', async (req, res) => {
+app.get('/api/project/:projectName/tree', authenticateToken, async (req, res) => {
     const { projectName } = req.params;
-    const projectPath = path.join(PROJECTS_DIR, projectName);
+    const userId = req.user.id;
     try {
-        const meta = await readProjectMeta(projectPath);
-        const rootPageInfo = meta.pages[meta.rootPageId];
+        const projectRes = await db.query('SELECT id FROM projects WHERE name = $1 AND user_id = $2', [projectName, userId]);
+        if (projectRes.rows.length === 0) {
+            return res.status(404).json({ error: `Project "${projectName}" not found for this user.` });
+        }
+        const projectId = projectRes.rows[0].id;
+
+        const pagesRes = await db.query(
+            'SELECT id, title, parent_id, display_order FROM pages WHERE project_id = $1 ORDER BY display_order ASC, title ASC',
+            [projectId]
+        );
+        const allPages = pagesRes.rows;
+        const rootPageInfo = allPages.find(page => page.parent_id === null);
 
         if (!rootPageInfo) {
-             // If project exists but root page is somehow missing, this is an issue
-            if (Object.keys(meta.pages).length === 0) { // Project is truly empty
-                 return res.json({
-                    rootPageId: null, // Or meta.rootPageId which might be dangling
-                    rootPageTitle: "Project Empty", 
-                    tree: []
-                });
-            }
-            return res.status(404).json({ error: 'Root page defined in metadata not found.' });
+             return res.json({
+                rootPageId: null,
+                rootPageTitle: "Project Empty or Root Missing", 
+                tree: []
+            });
         }
-
-        const pageTreeForProject = buildTreeFromMeta(meta, meta.rootPageId);
-
+        const pageTreeForProject = buildTree(allPages, rootPageInfo.id);
         res.json({
-            rootPageId: meta.rootPageId,
+            rootPageId: rootPageInfo.id,
             rootPageTitle: rootPageInfo.title,
             tree: pageTreeForProject
         });
     } catch (error) {
-        console.error(`Error getting tree for ${projectName}:`, error);
+        console.error(`Error getting tree for ${projectName}, user ${userId}:`, error);
         res.status(500).json({ error: `Failed to get project page tree: ${error.message}` });
     }
 });
 
-app.get('/api/project/:projectName/page/:pageId', async (req, res) => {
+app.get('/api/project/:projectName/page/:pageId', authenticateToken, async (req, res) => {
     const { projectName, pageId } = req.params;
-    const projectPath = path.join(PROJECTS_DIR, projectName);
-    const pagesContentPath = path.join(projectPath, PAGES_DIR_NAME);
+    const userId = req.user.id;
     try {
-        const meta = await readProjectMeta(projectPath);
-        const pageInfo = meta.pages[pageId];
-        if (!pageInfo) {
-            return res.status(404).json({ error: 'Page not found in project metadata.' });
-        }
-        const pageFilePath = path.join(pagesContentPath, pageInfo.contentFile);
-        const markdownContent = await fs.readFile(pageFilePath, 'utf-8');
-        const versionHash = calculateHash(markdownContent);
+        const pageRes = await db.query(
+            `SELECT p.id, p.title, p.markdown_content
+             FROM pages p JOIN projects pr ON p.project_id = pr.id
+             WHERE p.id = $1 AND pr.name = $2 AND pr.user_id = $3`,
+            [pageId, projectName, userId]
+        );
 
+        if (pageRes.rows.length === 0) {
+            return res.status(404).json({ error: 'Page not found in this project for this user.' });
+        }
+        const pageInfo = pageRes.rows[0];
+        const versionHash = calculateHash(pageInfo.markdown_content);
         res.json({
             id: pageInfo.id,
             title: pageInfo.title,
-            markdown: markdownContent,
+            markdown: pageInfo.markdown_content,
             versionHash: versionHash,
-            path: pageInfo.id
+            path: pageInfo.id 
         });
     } catch (error) {
-        console.error(`Error reading page ${pageId} in ${projectName}:`, error);
-        if (error.code === 'ENOENT') {
-            return res.status(404).json({ error: 'Page content file not found.' });
-        }
+        console.error(`Error reading page ${pageId} in ${projectName}, user ${userId}:`, error);
         res.status(500).json({ error: `Failed to read page: ${error.message}` });
     }
 });
 
-app.post('/api/project/:projectName/page/:pageId', async (req, res) => {
+app.post('/api/project/:projectName/page/:pageId', authenticateToken, async (req, res) => {
     const { projectName, pageId } = req.params;
     const { markdown, patch_text, base_version_hash } = req.body;
-
-    const projectPath = path.join(PROJECTS_DIR, projectName);
-    const pagesContentPath = path.join(projectPath, PAGES_DIR_NAME);
+    const userId = req.user.id;
     let finalMarkdownContent;
 
+    const client = await db.getClient();
     try {
-        let meta = await readProjectMeta(projectPath);
-        const pageInfo = meta.pages[pageId];
+        await client.query('BEGIN');
+        const pageQuery = `
+            SELECT p.id, p.title, p.markdown_content 
+            FROM pages p
+            JOIN projects pr ON p.project_id = pr.id
+            WHERE p.id = $1 AND pr.name = $2 AND pr.user_id = $3 FOR UPDATE`;
+        const pageRes = await client.query(pageQuery, [pageId, projectName, userId]);
 
-        if (!pageInfo) {
-            return res.status(404).json({ error: 'Page not found in project metadata. Cannot save.' });
+        if (pageRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Page not found in project for this user. Cannot save.' });
         }
-
-        const pageFilePath = path.join(pagesContentPath, pageInfo.contentFile);
+        let currentPageData = pageRes.rows[0];
 
         if (patch_text && typeof base_version_hash === 'string') {
-            console.log(`Server: Received PATCH for ${pageId}. Base hash: ${base_version_hash}`);
-            const currentServerMarkdown = await fs.readFile(pageFilePath, 'utf-8');
+            const currentServerMarkdown = currentPageData.markdown_content;
             const currentServerHash = calculateHash(currentServerMarkdown);
-
             if (currentServerHash !== base_version_hash) {
-                console.warn(`Server: Conflict for ${pageId}. Client base hash: ${base_version_hash}, Server hash: ${currentServerHash}`);
+                await client.query('ROLLBACK');
                 return res.status(409).json({
                     error: 'Conflict: Page has been modified since last load. Please reload.',
                     server_hash: currentServerHash
                 });
             }
-
             const patches = dmp.patch_fromText(patch_text);
             const [patchedMarkdown, results] = dmp.patch_apply(patches, currentServerMarkdown);
-
-            const allPatchesApplied = results.every(applied => applied === true);
-            if (!allPatchesApplied) {
-                console.error(`Server: Patch application failed for ${pageId}. Results: ${results}`);
+            if (!results.every(applied => applied === true)) {
+                await client.query('ROLLBACK');
                 return res.status(500).json({ error: 'Failed to apply patch to server content.' });
             }
             finalMarkdownContent = patchedMarkdown;
-            console.log(`Server: Patch applied successfully for ${pageId}.`);
-
         } else if (typeof markdown === 'string') {
-            console.log(`Server: Received FULL content for ${pageId}.`);
             finalMarkdownContent = markdown;
         } else {
-            return res.status(400).json({ error: 'Invalid save request: Requires markdown or patch_text with base_version_hash.' });
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'Invalid save request.' });
         }
-
-        await fs.writeFile(pageFilePath, finalMarkdownContent, 'utf-8');
-        pageInfo.updatedAt = new Date().toISOString();
-
+        
         const h1Match = finalMarkdownContent.match(/^#\s+(.*?)(\r?\n|$)/m);
-        let newTitleFromContent = pageInfo.title;
-        if (h1Match && h1Match[1]) {
-            newTitleFromContent = h1Match[1].trim();
-        } else {
-            if (finalMarkdownContent.trim() === "") newTitleFromContent = "Untitled";
-        }
-
-        if (newTitleFromContent !== pageInfo.title) {
-           pageInfo.title = newTitleFromContent;
-        }
-        meta.pages[pageId] = pageInfo;
-        await writeProjectMeta(projectPath, meta);
-
+        let newTitleFromContent = currentPageData.title;
+        if (h1Match && h1Match[1]) newTitleFromContent = h1Match[1].trim();
+        else if (finalMarkdownContent.trim() === "") newTitleFromContent = "Untitled";
+        
+        await client.query(
+            'UPDATE pages SET markdown_content = $1, title = $2 WHERE id = $3',
+            [finalMarkdownContent, newTitleFromContent, pageId]
+        );
+        await client.query('COMMIT');
         const newVersionHash = calculateHash(finalMarkdownContent);
-
         res.json({
             message: 'Page saved successfully',
             id: pageId,
-            newTitle: pageInfo.title,
+            newTitle: newTitleFromContent,
             newMarkdown: finalMarkdownContent,
             newVersionHash: newVersionHash
         });
-
     } catch (error) {
-        console.error(`Error saving page ${pageId} in ${projectName}:`, error);
-        if (error.message.includes('Project metadata not found') || (error.code === 'ENOENT' && !error.path.includes(PAGES_DIR_NAME))) {
-            return res.status(404).json({ error: `Project or essential project file not found: ${error.message}`});
-        }
+        await client.query('ROLLBACK');
+        console.error(`Error saving page ${pageId} in ${projectName}, user ${userId}:`, error);
         res.status(500).json({ error: `Failed to save page: ${error.message}` });
+    } finally {
+        client.release();
     }
 });
 
-app.post('/api/project/:projectName/pages', async (req, res) => {
+app.post('/api/project/:projectName/pages', authenticateToken, async (req, res) => {
     const { projectName } = req.params;
-    const { title, parentId } = req.body;
+    let { title, parentId } = req.body; 
+    const userId = req.user.id;
 
     if (!title || typeof title !== 'string' || title.trim() === '') {
         return res.status(400).json({ error: 'Valid title is required.' });
     }
+    const trimmedTitle = title.trim();
 
-    const projectPath = path.join(PROJECTS_DIR, projectName);
-    const pagesContentPath = path.join(projectPath, PAGES_DIR_NAME);
-
+    const client = await db.getClient();
     try {
-        const meta = await readProjectMeta(projectPath);
-        const actualParentId = parentId || meta.rootPageId;
+        await client.query('BEGIN');
+        const projectRes = await client.query('SELECT id FROM projects WHERE name = $1 AND user_id = $2', [projectName, userId]);
+        if (projectRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: `Project "${projectName}" not found for this user.` });
+        }
+        const projectId = projectRes.rows[0].id;
 
-        if (!meta.pages[actualParentId]) {
-            if (actualParentId === meta.rootPageId && meta.rootPageId && !meta.pages[meta.rootPageId]) {
-                 return res.status(400).json({ error: `Project root page (ID: ${actualParentId}) appears to be missing from metadata, though defined. Cannot create subpage. Project might be corrupted.` });
-            } else if (!meta.pages[actualParentId]) {
-                 return res.status(400).json({ error: `Parent page ID '${actualParentId}' not found.` });
+        let actualParentId = parentId;
+        if (!actualParentId) { 
+            const rootPageRes = await client.query(
+                'SELECT id FROM pages WHERE project_id = $1 AND parent_id IS NULL', [projectId]
+            );
+            if (rootPageRes.rows.length === 0) { 
+                await client.query('ROLLBACK');
+                return res.status(500).json({ error: 'Root page for project not found.' });
+            }
+            actualParentId = rootPageRes.rows[0].id;
+        } else {
+            const parentPageRes = await client.query(
+                'SELECT id FROM pages WHERE id = $1 AND project_id = $2', [actualParentId, projectId]
+            );
+            if (parentPageRes.rows.length === 0) {
+                await client.query('ROLLBACK');
+                return res.status(400).json({ error: `Parent page ID '${actualParentId}' not found in this project.` });
             }
         }
 
-
-        const newPageId = uuidv4();
-        const newPageContentFileName = `${newPageId}.md`;
-        const now = new Date().toISOString();
-        const trimmedTitle = title.trim();
-
-        const newPageData = {
-            id: newPageId,
-            title: trimmedTitle,
-            contentFile: newPageContentFileName,
-            parentId: actualParentId,
-            childrenIds: [],
-            createdAt: now,
-            updatedAt: now,
-        };
-        meta.pages[newPageId] = newPageData;
-
-        if (meta.pages[actualParentId]) { // Ensure parent exists before trying to push to its childrenIds
-            if (!meta.pages[actualParentId].childrenIds) {
-                 meta.pages[actualParentId].childrenIds = [];
-            }
-            meta.pages[actualParentId].childrenIds.push(newPageId);
-        }
-
-
+        const displayOrderRes = await client.query(
+            'SELECT COALESCE(MAX(display_order), -1) + 1 AS next_order FROM pages WHERE parent_id = $1 AND project_id = $2',
+            [actualParentId, projectId]
+        );
+        const displayOrder = displayOrderRes.rows[0].next_order;
         const initialContent = `# ${trimmedTitle}\n\nStart writing here...`;
-        const newPageFilePath = path.join(pagesContentPath, newPageContentFileName);
-        await fs.writeFile(newPageFilePath, initialContent, 'utf-8');
+        
+        const newPageRes = await client.query(
+            `INSERT INTO pages (project_id, title, markdown_content, parent_id, display_order)
+             VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+            [projectId, trimmedTitle, initialContent, actualParentId, displayOrder]
+        );
+        const newPageId = newPageRes.rows[0].id;
 
         let linkAddedToParentMarkdown = false;
-        if (parentId && parentId !== meta.rootPageId && meta.pages[parentId]) {
-            const parentPageInfo = meta.pages[parentId];
-            const parentFilePath = path.join(pagesContentPath, parentPageInfo.contentFile);
-            try {
-                let parentContent = await fs.readFile(parentFilePath, 'utf-8');
+        const rootPageCheck = await client.query('SELECT id FROM pages WHERE project_id = $1 AND parent_id IS NULL AND id = $2', [projectId, actualParentId]);
+        const isParentTheRoot = rootPageCheck.rows.length > 0;
+
+        if (actualParentId && !isParentTheRoot) {
+            const parentPageInfoRes = await client.query(
+                'SELECT markdown_content FROM pages WHERE id = $1 FOR UPDATE', [actualParentId]
+            );
+            if (parentPageInfoRes.rows.length > 0) {
+                let parentContent = parentPageInfoRes.rows[0].markdown_content || "";
                 if (parentContent.length > 0 && !parentContent.endsWith('\n\n')) {
                     parentContent += parentContent.endsWith('\n') ? '\n' : '\n\n';
                 }
                 parentContent += `[${trimmedTitle}](page://${newPageId})\n`;
-                await fs.writeFile(parentFilePath, parentContent, 'utf-8');
-                parentPageInfo.updatedAt = now;
+                await client.query(
+                    'UPDATE pages SET markdown_content = $1 WHERE id = $2', [parentContent, actualParentId]
+                );
                 linkAddedToParentMarkdown = true;
-            } catch (linkError) {
-                console.warn(`Could not automatically link subpage in parent ${parentId}: ${linkError.message}`);
             }
         }
-
-        await writeProjectMeta(projectPath, meta);
-
+        
+        await client.query('COMMIT');
         res.status(201).json({
-            message: 'Page created successfully',
-            newPageId: newPageId,
-            title: newPageData.title,
-            parentId: newPageData.parentId,
-            linkAddedToParentMarkdown
+            message: 'Page created successfully', newPageId, title: trimmedTitle, parentId: actualParentId, linkAddedToParentMarkdown
         });
-
     } catch (error) {
-        console.error(`Error creating page in ${projectName}:`, error);
+        await client.query('ROLLBACK');
+        console.error(`Error creating page in ${projectName}, user ${userId}:`, error);
         res.status(500).json({ error: `Failed to create page: ${error.message}` });
+    } finally {
+        client.release();
     }
 });
 
-// --- Project Actions ---
-app.delete('/api/project/:projectName', async (req, res) => {
+app.delete('/api/project/:projectName', authenticateToken, async (req, res) => {
     const { projectName } = req.params;
-    const projectPath = path.join(PROJECTS_DIR, projectName);
+    const userId = req.user.id;
     try {
-        if (!fssync.existsSync(projectPath)) {
-            return res.status(404).json({ error: `Project "${projectName}" not found.` });
+        const result = await db.query('DELETE FROM projects WHERE name = $1 AND user_id = $2 RETURNING id', [projectName, userId]);
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: `Project "${projectName}" not found for this user.` });
         }
-        await fs.rm(projectPath, { recursive: true, force: true });
         res.json({ message: `Project "${projectName}" deleted successfully.` });
     } catch (error) {
-        console.error(`Error deleting project ${projectName}:`, error);
+        console.error(`Error deleting project ${projectName}, user ${userId}:`, error);
         res.status(500).json({ error: `Failed to delete project: ${error.message}` });
     }
 });
 
-app.put('/api/project/:projectName/rename', async (req, res) => {
+app.put('/api/project/:projectName/rename', authenticateToken, async (req, res) => {
     const { projectName: oldProjectName } = req.params;
     const { newProjectName } = req.body;
+    const userId = req.user.id;
 
     if (!newProjectName || typeof newProjectName !== 'string' || newProjectName.trim() === '') {
         return res.status(400).json({ error: 'New project name is required.' });
@@ -456,313 +408,334 @@ app.put('/api/project/:projectName/rename', async (req, res) => {
         return res.status(400).json({ error: 'New project name is the same as the old one.' });
     }
 
-    const oldProjectPath = path.join(PROJECTS_DIR, oldProjectName);
-    const newProjectPath = path.join(PROJECTS_DIR, trimmedNewName);
-
+    const client = await db.getClient();
     try {
-        if (!fssync.existsSync(oldProjectPath)) {
-            return res.status(404).json({ error: `Project "${oldProjectName}" not found.` });
+        await client.query('BEGIN');
+        const oldProjectRes = await client.query('SELECT id FROM projects WHERE name = $1 AND user_id = $2', [oldProjectName, userId]);
+        if (oldProjectRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: `Project "${oldProjectName}" not found for this user.` });
         }
-        if (fssync.existsSync(newProjectPath)) {
-            return res.status(409).json({ error: `Project "${trimmedNewName}" already exists.` });
+        const projectId = oldProjectRes.rows[0].id;
+
+        const newProjectCheckRes = await client.query('SELECT id FROM projects WHERE name = $1 AND user_id = $2', [trimmedNewName, userId]);
+        if (newProjectCheckRes.rows.length > 0) {
+            await client.query('ROLLBACK');
+            return res.status(409).json({ error: `Project "${trimmedNewName}" already exists for this user.` });
         }
 
-        await fs.rename(oldProjectPath, newProjectPath);
-        const meta = await readProjectMeta(newProjectPath); // Read from new path
-        meta.projectName = trimmedNewName; // Update meta
-        // Optionally, update root page title if it was "Welcome to OldProjectName"
-        if (meta.pages[meta.rootPageId] && meta.pages[meta.rootPageId].title === `Welcome to ${oldProjectName}`) {
-            meta.pages[meta.rootPageId].title = `Welcome to ${trimmedNewName}`;
-            // Also update the H1 in the root page file
-            const rootPageInfo = meta.pages[meta.rootPageId];
-            const rootPagePath = path.join(newProjectPath, PAGES_DIR_NAME, rootPageInfo.contentFile);
-            let rootContent = await fs.readFile(rootPagePath, 'utf-8');
-            rootContent = rootContent.replace(new RegExp(`^# Welcome to ${oldProjectName}`, 'm'), `# Welcome to ${trimmedNewName}`);
-            await fs.writeFile(rootPagePath, rootContent, 'utf-8');
-        }
-        await writeProjectMeta(newProjectPath, meta); // Write to new path
+        await client.query(
+            'UPDATE projects SET name = $1 WHERE id = $2 AND user_id = $3',
+            [trimmedNewName, projectId, userId]
+        );
+        
+        const oldWelcomeTitle = `Welcome to ${oldProjectName}`;
+        const rootPageRes = await client.query(
+            `SELECT id, title, markdown_content FROM pages 
+             WHERE project_id = $1 AND parent_id IS NULL AND title = $2 FOR UPDATE`,
+            [projectId, oldWelcomeTitle]
+        );
 
+        if (rootPageRes.rows.length > 0) {
+            const rootPage = rootPageRes.rows[0];
+            const newRootTitle = `Welcome to ${trimmedNewName}`;
+            let rootContent = rootPage.markdown_content;
+            const safeOldProjectName = oldProjectName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            rootContent = rootContent.replace(new RegExp(`^# Welcome to ${safeOldProjectName}`, 'm'), `# Welcome to ${trimmedNewName}`);
+            
+            await client.query(
+                'UPDATE pages SET title = $1, markdown_content = $2 WHERE id = $3',
+                [newRootTitle, rootContent, rootPage.id]
+            );
+        }
+
+        await client.query('COMMIT');
         res.json({ message: `Project "${oldProjectName}" renamed to "${trimmedNewName}".`, newProjectName: trimmedNewName });
     } catch (error) {
-        console.error(`Error renaming project ${oldProjectName}:`, error);
+        await client.query('ROLLBACK');
+        console.error(`Error renaming project ${oldProjectName} for user ${userId}:`, error);
+        if (error.code === '23505' && error.constraint === 'projects_user_id_name_key') { 
+            return res.status(409).json({ error: `Project name "${trimmedNewName}" is already taken by you.` });
+        }
         res.status(500).json({ error: `Failed to rename project: ${error.message}` });
+    } finally {
+        client.release();
     }
 });
 
-app.post('/api/project/:projectName/duplicate', async (req, res) => {
+app.post('/api/project/:projectName/duplicate', authenticateToken, async (req, res) => {
     const { projectName: originalProjectName } = req.params;
     let { newProjectName } = req.body;
+    const userId = req.user.id;
 
-    if (!newProjectName || typeof newProjectName !== 'string' || newProjectName.trim() === '') {
-        newProjectName = `${originalProjectName} (Copy)`;
-    }
-    const trimmedNewName = newProjectName.trim();
-
-    if (trimmedNewName.includes('/') || trimmedNewName.includes('\\') || trimmedNewName.startsWith('.')) {
+    const trimmedNewName = (newProjectName || `${originalProjectName} (Copy)`).trim();
+     if (trimmedNewName.includes('/') || trimmedNewName.includes('\\') || trimmedNewName.startsWith('.')) {
         return res.status(400).json({ error: 'Invalid characters in new project name.' });
     }
+    if (originalProjectName === trimmedNewName) {
+        return res.status(400).json({ error: 'New project name cannot be the same as the original if specified.'})
+    }
 
-    const originalProjectPath = path.join(PROJECTS_DIR, originalProjectName);
-    const newProjectPath = path.join(PROJECTS_DIR, trimmedNewName);
-
+    const client = await db.getClient();
     try {
-        if (!fssync.existsSync(originalProjectPath)) {
-            return res.status(404).json({ error: `Project "${originalProjectName}" not found.` });
+        await client.query('BEGIN');
+        const originalProjectRes = await client.query('SELECT id FROM projects WHERE name = $1 AND user_id = $2', [originalProjectName, userId]);
+        if (originalProjectRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: `Project "${originalProjectName}" not found for this user.` });
         }
-        if (fssync.existsSync(newProjectPath)) {
-            return res.status(409).json({ error: `A project named "${trimmedNewName}" already exists.` });
+        const originalProjectId = originalProjectRes.rows[0].id;
+
+        const newProjectCheckRes = await client.query('SELECT id FROM projects WHERE name = $1 AND user_id = $2', [trimmedNewName, userId]);
+        if (newProjectCheckRes.rows.length > 0) {
+            await client.query('ROLLBACK');
+            return res.status(409).json({ error: `A project named "${trimmedNewName}" already exists for this user.` });
         }
 
-        // Use fs-extra for easy directory copy, or implement manually
-        // Manual copy:
-        fssync.mkdirSync(newProjectPath, { recursive: true });
-        const entries = await fs.readdir(originalProjectPath, { withFileTypes: true });
-        for (let entry of entries) {
-            const srcPath = path.join(originalProjectPath, entry.name);
-            const destPath = path.join(newProjectPath, entry.name);
-            if (entry.isDirectory()) {
-                // For simplicity, assuming PAGES_DIR_NAME is the only subdir with content.
-                // A full recursive copy utility would be better for more complex structures.
-                if (entry.name === PAGES_DIR_NAME) {
-                    fssync.mkdirSync(destPath, { recursive: true });
-                    const pageFiles = await fs.readdir(srcPath);
-                    for (const pageFile of pageFiles) {
-                        await fs.copyFile(path.join(srcPath, pageFile), path.join(destPath, pageFile));
-                    }
-                }
-            } else {
-                await fs.copyFile(srcPath, destPath);
+        const newProjectRes = await client.query(
+            'INSERT INTO projects (name, user_id) VALUES ($1, $2) RETURNING id',
+            [trimmedNewName, userId]
+        );
+        const newProjectId = newProjectRes.rows[0].id;
+
+        const originalRootPageRes = await client.query(
+            'SELECT id FROM pages WHERE project_id = $1 AND parent_id IS NULL', [originalProjectId]
+        );
+        if (originalRootPageRes.rows.length === 0) {
+            await client.query('COMMIT'); // Commit project creation even if root page missing
+            return res.status(201).json({ message: `Project duplicated as "${trimmedNewName}", but original had no root page.`, newProjectName: trimmedNewName });
+        }
+        const originalRootPageId = originalRootPageRes.rows[0].id;
+        const duplicatedIdMap = {}; 
+        await duplicatePageRecursiveDb(originalRootPageId, newProjectId, null, 0, client, duplicatedIdMap);
+        
+        const newRootPageToUpdateRes = await client.query(
+            `SELECT id, title, markdown_content FROM pages WHERE project_id = $1 AND parent_id IS NULL FOR UPDATE`,
+            [newProjectId]
+        );
+
+        if (newRootPageToUpdateRes.rows.length > 0) {
+            const newRootPage = newRootPageToUpdateRes.rows[0];
+            const expectedCopiedTitle = `Welcome to ${originalProjectName} (Copy)`; 
+            // This title adjustment logic assumes the root page of the original project was "Welcome to <OriginalProjectName>"
+            // and duplicatePageRecursiveDb appends " (Copy)" to titles.
+            // If the duplicated root page title is "Welcome to OriginalProjectName (Copy) (Copy)", this logic needs adjustment.
+            // The current duplicatePageRecursiveDb makes titles like "OriginalTitle (Copy)".
+            // If original root page title was "Welcome to OriginalProject", duplicated is "Welcome to OriginalProject (Copy)"
+            if (newRootPage.title.startsWith(`Welcome to ${originalProjectName}`) && newRootPage.title.endsWith('(Copy)')) {
+                const finalNewRootPageTitle = `Welcome to ${trimmedNewName}`;
+                let rootContent = newRootPage.markdown_content;
+                // Regex to replace "# Welcome to OriginalProjectName (Copy)" with "# Welcome to NewDuplicatedProjectName"
+                const titleInMarkdownRegex = new RegExp(`^# ${newRootPage.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'm');
+                rootContent = rootContent.replace(titleInMarkdownRegex, `# ${finalNewRootPageTitle}`);
+                
+                await client.query(
+                    'UPDATE pages SET title = $1, markdown_content = $2 WHERE id = $3',
+                    [finalNewRootPageTitle, rootContent, newRootPage.id]
+                );
             }
         }
-        
-        // Update meta in the new project
-        const meta = await readProjectMeta(newProjectPath);
-        meta.projectName = trimmedNewName;
-        // If root page title was "Welcome to OriginalProjectName", update it
-        if (meta.pages[meta.rootPageId] && meta.pages[meta.rootPageId].title === `Welcome to ${originalProjectName}`) {
-           meta.pages[meta.rootPageId].title = `Welcome to ${trimmedNewName}`;
-           // Also update the H1 in the root page file
-           const rootPageInfo = meta.pages[meta.rootPageId];
-           const rootPagePath = path.join(newProjectPath, PAGES_DIR_NAME, rootPageInfo.contentFile);
-           let rootContent = await fs.readFile(rootPagePath, 'utf-8');
-           rootContent = rootContent.replace(new RegExp(`^# Welcome to ${originalProjectName}`, 'm'), `# Welcome to ${trimmedNewName}`);
-           await fs.writeFile(rootPagePath, rootContent, 'utf-8');
-        }
-        await writeProjectMeta(newProjectPath, meta);
 
+        await client.query('COMMIT');
         res.status(201).json({ message: `Project "${originalProjectName}" duplicated as "${trimmedNewName}".`, newProjectName: trimmedNewName });
     } catch (error) {
-        console.error(`Error duplicating project ${originalProjectName}:`, error);
-        // Clean up partially created new project directory if duplication failed mid-way
-        if (fssync.existsSync(newProjectPath)) {
-            await fs.rm(newProjectPath, { recursive: true, force: true }).catch(err => console.error("Cleanup failed:", err));
+        await client.query('ROLLBACK');
+        console.error(`Error duplicating project ${originalProjectName} for user ${userId}:`, error);
+        if (error.code === '23505' && error.constraint === 'projects_user_id_name_key') {
+            return res.status(409).json({ error: `A project named "${trimmedNewName}" already exists for this user.` });
         }
         res.status(500).json({ error: `Failed to duplicate project: ${error.message}` });
+    } finally {
+        client.release();
     }
 });
 
-
-// --- Page Actions ---
-app.delete('/api/project/:projectName/page/:pageId', async (req, res) => {
+app.delete('/api/project/:projectName/page/:pageId', authenticateToken, async (req, res) => {
     const { projectName, pageId } = req.params;
-    const projectPath = path.join(PROJECTS_DIR, projectName);
-    const pagesContentPath = path.join(projectPath, PAGES_DIR_NAME);
-
+    const userId = req.user.id;
+    const client = await db.getClient();
     try {
-        const meta = await readProjectMeta(projectPath);
-        if (pageId === meta.rootPageId) {
-            return res.status(400).json({ error: 'Cannot delete the root page of a project directly. Use "Delete Project" instead.' });
+        await client.query('BEGIN');
+        const projectRes = await client.query('SELECT id FROM projects WHERE name = $1 AND user_id = $2', [projectName, userId]);
+        if (projectRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: `Project "${projectName}" not found for this user.` });
         }
-        if (!meta.pages[pageId]) {
-            return res.status(404).json({ error: 'Page not found.' });
+        const projectId = projectRes.rows[0].id;
+
+        const pageInfoRes = await client.query(
+            'SELECT parent_id FROM pages WHERE id = $1 AND project_id = $2', [pageId, projectId]
+        );
+        if (pageInfoRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Page not found in this project.' });
+        }
+        if (pageInfoRes.rows[0].parent_id === null) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'Cannot delete the root page. Delete the project instead.' });
         }
 
-        await deletePageRecursive(meta, pageId, pagesContentPath);
-        await writeProjectMeta(projectPath, meta);
-
-        res.json({ message: 'Page and its subpages deleted successfully.' });
+        const deleteRes = await client.query('DELETE FROM pages WHERE id = $1 AND project_id = $2', [pageId, projectId]);
+        if (deleteRes.rowCount === 0) { 
+             await client.query('ROLLBACK');
+             return res.status(404).json({ error: 'Page not found or already deleted.' });
+        }
+        await client.query('COMMIT');
+        res.json({ message: 'Page and its subpages deleted successfully.' }); // Note: subpages are deleted due to ON DELETE CASCADE in DB schema
     } catch (error) {
-        console.error(`Error deleting page ${pageId} in ${projectName}:`, error);
+        await client.query('ROLLBACK');
+        console.error(`Error deleting page ${pageId} in ${projectName}, user ${userId}:`, error);
         res.status(500).json({ error: `Failed to delete page: ${error.message}` });
+    } finally {
+        client.release();
     }
 });
 
-app.put('/api/project/:projectName/page/:pageId/rename', async (req, res) => {
+app.put('/api/project/:projectName/page/:pageId/rename', authenticateToken, async (req, res) => {
     const { projectName, pageId } = req.params;
     const { newTitle } = req.body;
+    const userId = req.user.id;
 
     if (!newTitle || typeof newTitle !== 'string' || newTitle.trim() === '') {
         return res.status(400).json({ error: 'New title is required.' });
     }
     const trimmedNewTitle = newTitle.trim();
-    const projectPath = path.join(PROJECTS_DIR, projectName);
-    const pagesContentPath = path.join(projectPath, PAGES_DIR_NAME);
-
+    const client = await db.getClient();
     try {
-        const meta = await readProjectMeta(projectPath);
-        const pageInfo = meta.pages[pageId];
-        if (!pageInfo) {
-            return res.status(404).json({ error: 'Page not found.' });
+        await client.query('BEGIN');
+        const pageRes = await client.query(
+            `SELECT p.id, p.markdown_content FROM pages p
+             JOIN projects pr ON p.project_id = pr.id
+             WHERE p.id = $1 AND pr.name = $2 AND pr.user_id = $3 FOR UPDATE`,
+            [pageId, projectName, userId]
+        );
+
+        if (pageRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Page not found in this project for this user.' });
         }
-
-        pageInfo.title = trimmedNewTitle;
-        pageInfo.updatedAt = new Date().toISOString();
-
-        // Update H1 in markdown file
-        const pageFilePath = path.join(pagesContentPath, pageInfo.contentFile);
-        let content = await fs.readFile(pageFilePath, 'utf-8');
+        const pageInfo = pageRes.rows[0];
+        
+        let content = pageInfo.markdown_content || "";
         const h1Regex = /^#\s+(.*?)(\r?\n|$)/m;
-        if (h1Regex.test(content)) {
-            content = content.replace(h1Regex, `# ${trimmedNewTitle}$2`);
-        } else {
-            content = `# ${trimmedNewTitle}\n\n${content}`;
-        }
-        await fs.writeFile(pageFilePath, content, 'utf-8');
-        await writeProjectMeta(projectPath, meta);
+        const safeTrimmedNewTitle = trimmedNewTitle.replace(/\$/g, '$$$$'); // Escape $ for string replacement
 
+        if (h1Regex.test(content)) {
+            content = content.replace(h1Regex, `# ${safeTrimmedNewTitle}$2`);
+        } else {
+            content = `# ${safeTrimmedNewTitle}\n\n${content}`;
+        }
+
+        await client.query(
+            'UPDATE pages SET title = $1, markdown_content = $2 WHERE id = $3',
+            [trimmedNewTitle, content, pageId]
+        );
+        await client.query('COMMIT');
         res.json({ message: 'Page renamed successfully.', newTitle: trimmedNewTitle, pageId });
     } catch (error) {
-        console.error(`Error renaming page ${pageId} in ${projectName}:`, error);
+        await client.query('ROLLBACK');
+        console.error(`Error renaming page ${pageId} in ${projectName}, user ${userId}:`, error);
         res.status(500).json({ error: `Failed to rename page: ${error.message}` });
+    } finally {
+        client.release();
     }
 });
 
-app.post('/api/project/:projectName/page/:pageId/duplicate', async (req, res) => {
+app.post('/api/project/:projectName/page/:pageId/duplicate', authenticateToken, async (req, res) => {
     const { projectName, pageId: originalPageId } = req.params;
-    const projectPath = path.join(PROJECTS_DIR, projectName);
-    const pagesContentPath = path.join(projectPath, PAGES_DIR_NAME);
-    const now = new Date().toISOString();
+    const userId = req.user.id;
+    const client = await db.getClient();
 
     try {
-        const meta = await readProjectMeta(projectPath);
-        const originalPageInfo = meta.pages[originalPageId];
+        await client.query('BEGIN');
+        const originalPageQuery = await client.query(
+            `SELECT p.id, p.project_id, p.parent_id, p.display_order 
+             FROM pages p
+             JOIN projects pr ON p.project_id = pr.id
+             WHERE p.id = $1 AND pr.name = $2 AND pr.user_id = $3`,
+            [originalPageId, projectName, userId]
+        );
 
-        if (!originalPageInfo) {
-            return res.status(404).json({ error: 'Original page not found.' });
+        if (originalPageQuery.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ error: 'Original page not found in this project for this user.' });
         }
-        if (originalPageId === meta.rootPageId) {
+        const { project_id: projectId, parent_id: originalParentId, display_order: originalDisplayOrder } = originalPageQuery.rows[0];
+
+        if (originalParentId === null) {
+            await client.query('ROLLBACK');
             return res.status(400).json({ error: 'Cannot duplicate the root page. Duplicate the project instead.' });
         }
         
-        const parentOfOriginal = meta.pages[originalPageInfo.parentId];
-        if (!parentOfOriginal) {
-             return res.status(500).json({ error: 'Parent of original page not found in metadata. Cannot determine where to place duplicate.' });
-        }
-
-        const allNewPageMetas = {}; // To collect all new page metas before adding to main meta
-        const duplicatedIdMap = {};   // To map original IDs to new IDs if needed (e.g. for links - not implemented here)
-
-        const newTopLevelPageId = await duplicatePageRecursive(meta, originalPageId, originalPageInfo.parentId, pagesContentPath, allNewPageMetas, duplicatedIdMap, now);
+        // Make space for the new duplicated page(s)
+        await client.query(
+            `UPDATE pages SET display_order = display_order + 1 
+             WHERE project_id = $1 AND parent_id = $2 AND display_order > $3`,
+            [projectId, originalParentId, originalDisplayOrder]
+        );
+        const newDisplayOrder = originalDisplayOrder + 1;
+        
+        const duplicatedIdMap = {};
+        const newTopLevelPageId = await duplicatePageRecursiveDb(originalPageId, projectId, originalParentId, newDisplayOrder, client, duplicatedIdMap);
 
         if (!newTopLevelPageId) {
+            await client.query('ROLLBACK'); 
             throw new Error("Duplication process failed to return a new page ID.");
         }
-
-        // Add all newly created page metas to the main meta object
-        for (const id in allNewPageMetas) {
-            meta.pages[id] = allNewPageMetas[id];
-        }
         
-        // Add the new top-level duplicated page to its parent's childrenIds
-        if (parentOfOriginal.childrenIds) {
-            const originalIndex = parentOfOriginal.childrenIds.indexOf(originalPageId);
-            if (originalIndex !== -1) {
-                parentOfOriginal.childrenIds.splice(originalIndex + 1, 0, newTopLevelPageId);
-            } else {
-                parentOfOriginal.childrenIds.push(newTopLevelPageId); // Fallback
-            }
-        } else {
-            parentOfOriginal.childrenIds = [newTopLevelPageId];
-        }
-        parentOfOriginal.updatedAt = now;
+        const newPageDetails = await client.query('SELECT title FROM pages WHERE id = $1', [newTopLevelPageId]);
+        const newTitle = newPageDetails.rows.length > 0 ? newPageDetails.rows[0].title : "Untitled (Copy)";
 
-        await writeProjectMeta(projectPath, meta);
-
+        await client.query('COMMIT');
         res.status(201).json({
             message: 'Page duplicated successfully.',
-            newRootPageId: newTopLevelPageId, // The ID of the top-most page that was duplicated
-            newTitle: allNewPageMetas[newTopLevelPageId].title
+            newRootPageId: newTopLevelPageId, 
+            newTitle: newTitle // Title will be "Original Title (Copy)"
         });
+
     } catch (error) {
-        console.error(`Error duplicating page ${originalPageId} in ${projectName}:`, error);
+        await client.query('ROLLBACK');
+        console.error(`Error duplicating page ${originalPageId} in ${projectName}, user ${userId}:`, error);
         res.status(500).json({ error: `Failed to duplicate page: ${error.message}` });
+    } finally {
+        client.release();
     }
 });
 
-
-app.get(['/'], (req, res, next) => {
+// Catch-all for SPA
+app.get(('/'), (req, res, next) => {
     if (req.path.startsWith('/api/')) {
         return res.status(404).json({ error: `API endpoint ${req.path} not found.` });
     }
-    if (req.path.endsWith('.js') || req.path.endsWith('.css') || req.path.endsWith('.map')) {
-        return next();
+    if (/\.(css|js|map|ico|png|jpg|jpeg|gif|svg|woff|woff2|ttf|eot)$/i.test(req.path)) {
+        // Let express.static handle it if it's a static file request
+        return next(); 
     }
-    res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
+    res.sendFile(path.join(PUBLIC_DIR, 'index.html'), (err) => {
+        if (err) {
+            console.error("Error sending index.html:", err);
+            res.status(500).send("Error serving application.");
+        }
+    });
 });
 
-
-async function initializeNewProject(projectPath, projectName) { // Used for user-created projects
-    const pagesDir = path.join(projectPath, PAGES_DIR_NAME);
-    if (!fssync.existsSync(pagesDir)) {
-        fssync.mkdirSync(pagesDir, { recursive: true });
-    }
-
-    const rootPageId = uuidv4();
-    const now = new Date().toISOString();
-
-    const initialMeta = {
-        projectName: projectName,
-        rootPageId: rootPageId,
-        pages: {
-            [rootPageId]: {
-                id: rootPageId,
-                title: `Welcome to ${projectName}`, 
-                contentFile: `${rootPageId}.md`,
-                parentId: null,
-                childrenIds: [], 
-                createdAt: now,
-                updatedAt: now,
+async function startServer() {
+    try {
+        await db.initializeSchema(); 
+        // The default project is now initialized per user upon registration (in auth.js),
+        // so no global initialization is needed here.
+        
+        app.listen(port, '0.0.0.0', () => {
+            console.log(`Server listening at http://localhost:${port}`);
+            console.log(`Public directory: ${PUBLIC_DIR}`);
+            if (!fssync.existsSync(PUBLIC_DIR) || !fssync.existsSync(path.join(PUBLIC_DIR, 'index.html'))) {
+                console.warn("Warning: Public directory or index.html not found. SPA might not serve correctly.");
             }
-        }
-    };
-    const rootPageContent = `# Welcome to ${projectName}\n\nStart building your project!`;
-    await fs.writeFile(path.join(pagesDir, `${rootPageId}.md`), rootPageContent, 'utf-8');
-    await writeProjectMeta(projectPath, initialMeta);
-    console.log(`Initialized new project "${projectName}".`);
+        });
+    } catch (error) {
+        console.error("Failed to start server:", error);
+        process.exit(1);
+    }
 }
 
-
-app.listen(port, '0.0.0.0', async () => {
-    console.log(`Server listening at http://localhost:${port}`);
-    console.log(`Projects directory: ${PROJECTS_DIR}`);
-    console.log(`Public directory: ${PUBLIC_DIR}`);
-
-    if (!fssync.existsSync(PUBLIC_DIR)) {
-        fssync.mkdirSync(PUBLIC_DIR, { recursive: true });
-        console.log(`Created public directory: ${PUBLIC_DIR}.`);
-    }
-     if (!fssync.existsSync(path.join(__dirname, 'index.html')) && !fssync.existsSync(path.join(PUBLIC_DIR, 'index.html'))) {
-        console.warn("Warning: index.html not found in the root or public directory. Ensure your HTML file is correctly placed and served.");
-    }
-
-    if (!fssync.existsSync(PROJECTS_DIR)) {
-        fssync.mkdirSync(PROJECTS_DIR, { recursive: true });
-        console.log(`Created projects directory: ${PROJECTS_DIR}`);
-    }
-
-    const sampleProjectName = 'welcome';
-    const sampleProjectPath = path.join(PROJECTS_DIR, sampleProjectName);
-
-    if (!fssync.existsSync(path.join(sampleProjectPath, META_FILE_NAME))) {
-        if (!fssync.existsSync(sampleProjectPath)) {
-            fssync.mkdirSync(sampleProjectPath, { recursive: true });
-        }
-        // Call the imported function, passing necessary configs/helpers from server.js scope
-        await initializeDefaultProject(sampleProjectPath, sampleProjectName, {
-            PAGES_DIR_NAME,
-            writeProjectMeta
-        });
-    } else {
-        console.log(`Sample project "${sampleProjectName}" already exists.`);
-    }
-});
+startServer();

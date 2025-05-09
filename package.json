@@ -13,9 +13,13 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "bcrypt": "^5.1.1",
     "diff-match-patch": "^1.0.5",
+    "dotenv": "^16.5.0",
     "express": "^5.1.0",
+    "jsonwebtoken": "^9.0.2",
     "nodemon": "^3.1.10",
+    "pg": "^8.15.6",
     "showdown": "^2.1.0",
     "uuid": "^11.1.0"
   }

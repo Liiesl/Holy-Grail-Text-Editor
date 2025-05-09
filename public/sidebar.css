@@ -1,22 +1,86 @@
 /* -------------------- */
+/* --- USER PROFILE --- */
+/* -------------------- */
+#user-profile-area-container { /* This is the static container in HTML */
+    /* Add top padding to match sidebar's original top padding */
+    padding-top: 20px;
+    margin-bottom: 0px; /* Space between user profile and projects heading, adjust as needed */
+}
+
+.user-profile-area {
+    display: flex;
+    align-items: center;
+    padding: 0px 5px 15px 5px; /* Bottom padding creates space before projects heading */
+    border-bottom: 1px solid var(--border-color-primary);
+}
+
+.profile-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background-color: var(--accent-primary);
+    color: var(--bg-primary); /* Text color for the letter */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 0.9em;
+    margin-right: 10px;
+    flex-shrink: 0;
+    text-transform: uppercase;
+}
+
+.username-display {
+    flex-grow: 1;
+    font-weight: 500;
+    font-size: 1.2em;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding-right: 5px; /* Space before settings button */
+}
+
+.user-settings-btn { /* For the gear button */
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 6px;
+    border-radius: var(--border-radius-sm);
+    font-size: 1em; /* Icon size */
+    line-height: 1;
+    flex-shrink: 0;
+}
+.user-settings-btn:hover {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+/* -------------------- */
 /* --- SIDEBAR --- */
 /* -------------------- */
 .sidebar {
     width: var(--sidebar-width);
     background-color: var(--bg-secondary);
     color: var(--text-secondary);
-    padding: 20px 15px;
+    padding: 0px 15px 20px 15px; /* Top padding 0 (handled by user profile), bottom padding 20px */
     display: flex;
     flex-direction: column;
-    overflow-y: auto;
+    /* overflow-y: auto; */ /* REMOVED - Sidebar itself should not scroll */
+    height: 100vh; /* ADDED - Make sidebar full viewport height */
+    position: sticky; /* ADDED - Stick to the top of its scrolling container */
+    top: 0; /* ADDED - Align sticky position to the top */
     border-right: 1px solid var(--border-color-primary);
 }
 
 /* Projects Heading Area */
 #projects-heading-container {
     margin-bottom: 15px;
+    /* padding-top: 10px; No longer needed, user profile area provides top separation */
     padding-bottom: 10px;
     border-bottom: 1px solid var(--border-color-primary);
+    flex-shrink: 0; /* Prevent this from shrinking if page-tree content is large */
 }
 
 .projects-h2-wrapper {
@@ -67,9 +131,11 @@
 
 
 #page-tree {
-    flex-grow: 1;
-    overflow-y: auto;
+    flex-grow: 1; /* Takes remaining vertical space in the sidebar */
+    overflow-y: auto; /* Enables scrolling ONLY for the page tree */
     font-size: 0.95em;
+    /* Add some padding at the bottom of the scrollable area if needed,
+       though sidebar's bottom padding might suffice */
 }
 
 /* Styles for the list of projects itself */
@@ -116,12 +182,10 @@
     width: 12px;
     text-align: center;
     transition: transform 0.15s ease;
-    /* color: var(--text-secondary); Default color inherited or set by active state */
     flex-shrink: 0;
 }
 
 .project-header .fas:not(.project-expand-icon) { /* Project type icon (fa-book) */
-    /* color: var(--text-secondary); Default color inherited or set by active state */
     font-size: 0.9em;
     width: 16px;
     text-align: center;
@@ -174,7 +238,6 @@
 
 .project-pages-container li { /* Represents a page item */
     margin-bottom: 2px;
-    /* position: relative; Not needed here, page-item-content will be relative */
 }
 
 .project-pages-container .page-item-content {
