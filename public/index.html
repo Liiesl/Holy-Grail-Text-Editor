@@ -16,15 +16,15 @@
    <link rel="touch-icon" href="/icons/icon-192x192.png"> <!-- Or a specific Apple icon size -->
 
    <link rel="stylesheet" href="style.css">
-   <link rel="stylesheet" href="liveEditor.css">
+   <link rel="stylesheet" href="/LEDR/liveEditor.css">
    <link rel="stylesheet" href="auth.css">
    <link rel="stylesheet" href="/SCMD/slashCommand.css">
-   <link rel="stylesheet" href="sidebar.css">
-   <link rel="stylesheet" href="textStyleModal.css">
+   <link rel="stylesheet" href="/SDPNL/sidebar.css">
+   <link rel="stylesheet" href="/LEDR/textStyleModal.css">
    <link rel="stylesheet" href="/SCMD/embedPageModal.css">
    <link rel="stylesheet" href="/SCMD/emojiModal.css">
    <link rel="stylesheet" href="userSettingsModal.css">
-   <link rel="stylesheet" href="pagePeekModal.css">
+   <link rel="stylesheet" href="/LEDR/pagePeekModal.css">
    <link rel="stylesheet" href="homePage.css"> 
    <script src="https://cdnjs.cloudflare.com/ajax/libs/turndown/7.0.0/turndown.js"></script>
    <script src="https://cdnjs.cloudflare.com/ajax/libs/showdown/2.1.0/showdown.min.js"></script>
@@ -71,11 +71,21 @@
         <div class="container">
             <aside class="sidebar">
                 <div id="user-profile-area-container"></div>
-                <!-- Projects H2 and page tree will be populated by sidePanel.js -->
-                <div id="projects-heading-container">
+                <!-- Home button will be inserted here by JS -->
+                
+                <!-- Announcements Section -->
+                <div id="announcements-section-header" class="sidebar-section">
+                    <!-- "Announcements" H2 will go here -->
+                </div>
+                <div id="announcements-content-area" class="sidebar-content">
+                    <!-- Announcement list and page trees will be populated here -->
+                </div>
+
+                <!-- Projects Section -->
+                <div id="projects-section-header" class="sidebar-section-header">
                     <!-- H2 with actions will go here -->
                 </div>
-                <div id="page-tree">
+                <div id="pageTreeContainer" class="sidebar-content-area">
                     <!-- Project list and page trees will be populated here -->
                 </div>
             </aside>

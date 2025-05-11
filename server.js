@@ -11,6 +11,8 @@ require('dotenv').config(); // Configures .env for the whole application
 // Auth related functionalities are now imported from auth.js
 const { authRouter, authenticateToken, authorizeRole } = require('./auth'); // authorizeRole might be used directly in server.js for other routes if needed.
 const adminRoutes = require('./adminRoutes'); // Import admin routes
+const announcementAdminRoutes = require('./announcementAdminRoutes'); // New admin routes for announcements
+const announcementPublicRoutes = require('./announcementPublicRoutes'); // New public routes for announcements
 
 const dmp = new DiffMatchPatch();
 const app = express();
@@ -25,6 +27,10 @@ app.use(express.static(PUBLIC_DIR));
 app.use('/api/auth', authRouter);
 // Register admin routes
 app.use('/api/admin', adminRoutes);
+// Register admin routes for managing announcements
+app.use('/api/admin/announcements', announcementAdminRoutes);
+// Register public routes for viewing announcements
+app.use('/api/announcements', announcementPublicRoutes);
 
 
 function calculateHash(text) {
@@ -89,7 +95,7 @@ async function duplicatePageRecursiveDb(originalPageId, newProjectId, newParentI
     return newPageId;
 }
 
-// --- Project API Endpoints (Protected) ---
+// Creating a project should default to 'user_project'
 app.post('/api/projects', authenticateToken, async (req, res) => {
     const { projectName } = req.body;
     const userId = req.user.id;
@@ -105,14 +111,19 @@ app.post('/api/projects', authenticateToken, async (req, res) => {
     const client = await db.getClient();
     try {
         await client.query('BEGIN');
-        const existingProject = await client.query('SELECT id FROM projects WHERE name = $1 AND user_id = $2', [trimmedProjectName, userId]);
+        // Ensure type is 'user_project' for this route
+        const existingProject = await client.query(
+            "SELECT id FROM projects WHERE name = $1 AND user_id = $2 AND type = 'user_project'",
+            [trimmedProjectName, userId]
+        );
         if (existingProject.rows.length > 0) {
             await client.query('ROLLBACK');
             return res.status(409).json({ error: `Project "${trimmedProjectName}" already exists for this user.` });
         }
 
         const projectRes = await client.query(
-            'INSERT INTO projects (name, user_id) VALUES ($1, $2) RETURNING id',
+            // Explicitly set type='user_project', though DB default also handles this
+            "INSERT INTO projects (name, user_id, type) VALUES ($1, $2, 'user_project') RETURNING id",
             [trimmedProjectName, userId]
         );
         const projectId = projectRes.rows[0].id;
@@ -139,10 +150,16 @@ app.post('/api/projects', authenticateToken, async (req, res) => {
     }
 });
 
+// Modify these existing routes slightly if needed to ensure they only operate on type='user_project'
+// or that their behavior is appropriate. For instance, listing projects:
 app.get('/api/projects', authenticateToken, async (req, res) => {
     const userId = req.user.id;
     try {
-        const result = await db.query('SELECT name FROM projects WHERE user_id = $1 ORDER BY name ASC', [userId]);
+        // Ensure we only list 'user_project' type here
+        const result = await db.query(
+            "SELECT name FROM projects WHERE user_id = $1 AND type = 'user_project' ORDER BY name ASC",
+            [userId]
+        );
         res.json(result.rows.map(row => row.name));
     } catch (error) {
         console.error(`Error listing projects for user ${userId}:`, error);

@@ -27,6 +27,65 @@ async function initializeSchema() {
 
     await client.query('CREATE EXTENSION IF NOT EXISTS "uuid-ossp";');
 
+    // Inside initializeSchema, before creating 'users' table or after 'uuid-ossp'
+    // --- Create project_type ENUM type ---
+    await client.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'project_type') THEN
+          CREATE TYPE project_type AS ENUM ('user_project', 'announcement');
+        END IF;
+      END $$;
+    `);
+    console.log('Ensured "project_type" ENUM type exists.');
+
+    // --- Create project_status ENUM type ---
+    await client.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'project_status') THEN
+          CREATE TYPE project_status AS ENUM ('draft', 'published', 'archived');
+        END IF;
+      END $$;
+    `);
+    console.log('Ensured "project_status" ENUM type exists.');
+
+    // --- Projects table modifications ---
+    // (After the existing CREATE TABLE IF NOT EXISTS projects)
+
+    // Add 'type' column if it doesn't exist
+    await client.query("ALTER TABLE projects ADD COLUMN IF NOT EXISTS type project_type NOT NULL DEFAULT 'user_project';");
+    console.log('Ensured "type" column exists in "projects" table with default "user_project".');
+
+    // Add 'status' column if it doesn't exist
+    await client.query("ALTER TABLE projects ADD COLUMN IF NOT EXISTS status project_status DEFAULT NULL;"); // NULL for user_project, set for announcement
+    console.log('Ensured "status" column exists in "projects" table.');
+
+    // Add unique constraint for announcement names (globally unique for type='announcement')
+    // This allows multiple users to have a project named "My Notes" (type='user_project')
+    // but only one announcement named "System Update" (type='announcement')
+    const uniqueAnnouncementNameConstraint = 'projects_announcement_name_key';
+    const announcementNameConstraintCheck = await client.query(
+        `SELECT conname FROM pg_constraint WHERE conrelid = 'projects'::regclass AND conname = $1;`,
+        [uniqueAnnouncementNameConstraint]
+    );
+    if (announcementNameConstraintCheck.rows.length === 0) {
+        try {
+            // Note: This partial unique index requires PostgreSQL.
+            // It ensures 'name' is unique ONLY for projects of type 'announcement'.
+            // Regular user projects still rely on the (user_id, name) unique constraint.
+            await client.query(`
+                CREATE UNIQUE INDEX IF NOT EXISTS ${uniqueAnnouncementNameConstraint}
+                ON projects (name) WHERE (type = 'announcement');
+            `);
+            console.log(`Added UNIQUE constraint ${uniqueAnnouncementNameConstraint} on projects(name) for type='announcement'.`);
+        } catch (e) {
+            console.warn(`Warning: Could not add UNIQUE constraint ${uniqueAnnouncementNameConstraint}: ${e.message}. This might happen if existing data violates it.`);
+        }
+    } else {
+        console.log(`UNIQUE constraint ${uniqueAnnouncementNameConstraint} on projects(name) for type='announcement' already exists.`);
+    }
+
     // --- Create user_role ENUM type ---
     await client.query(`
       DO $$

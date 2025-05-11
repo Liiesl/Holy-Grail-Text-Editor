@@ -1,0 +1,492 @@
+/* -------------------- */
+/* --- USER PROFILE --- */
+/* -------------------- */
+#user-profile-area-container {
+    padding-top: 20px;
+    margin-bottom: 0px;
+}
+
+.user-profile-area {
+    display: flex;
+    align-items: center;
+    padding: 0px 5px 15px 5px;
+    border-bottom: 1px solid var(--border-color-primary);
+}
+
+.profile-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background-color: var(--accent-primary);
+    color: var(--bg-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 0.9em;
+    margin-right: 10px;
+    flex-shrink: 0;
+    text-transform: uppercase;
+    -webkit-user-select: none; /* Safari */
+    -moz-user-select: none;    /* Firefox */
+    -ms-user-select: none;     /* IE10+/Edge */
+    user-select: none;         /* Standard */
+}
+
+.username-display {
+    flex-grow: 1;
+    font-weight: 500;
+    font-size: 1.2em;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding-right: 5px;
+    -webkit-user-select: none; /* Safari */
+    -moz-user-select: none;    /* Firefox */
+    -ms-user-select: none;     /* IE10+/Edge */
+    user-select: none;         /* Standard */
+}
+
+.user-settings-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 6px;
+    border-radius: var(--border-radius-sm);
+    font-size: 1em;
+    line-height: 1;
+    flex-shrink: 0;
+}
+.user-settings-btn:hover {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+/* -------------------- */
+/* --- HOME BUTTON ---- */
+/* -------------------- */
+
+.home-button-section {
+    padding: 10px 0px; 
+    flex-shrink: 0; 
+}
+
+.sidebar-home-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px; 
+    width: 100%; 
+    padding: 8px 10px; 
+    cursor: pointer;
+    border-radius: var(--border-radius); 
+    border: none; 
+    background-color: transparent; 
+    text-align: left; 
+    font-weight: 500; 
+    font-size: 0.95em; 
+    color: var(--text-secondary); 
+    transition: background-color 0.15s ease, color 0.15s ease; 
+    -webkit-user-select: none; 
+    -moz-user-select: none;    
+    -ms-user-select: none;     
+    user-select: none;         
+}
+
+.sidebar-home-btn:hover {
+    background-color: var(--bg-tertiary); 
+    color: var(--text-primary); 
+}
+
+.sidebar-home-btn .fas { 
+    font-size: 1em; 
+    width: 16px; 
+    text-align: center; 
+    flex-shrink: 0; 
+}
+
+/* -------------------- */
+/* --- SIDEBAR --- */
+/* -------------------- */
+.sidebar {
+    width: var(--sidebar-width);
+    background-color: var(--bg-secondary);
+    color: var(--text-secondary);
+    padding: 0px 15px 20px 15px;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    position: sticky;
+    top: 0;
+    border-right: 1px solid var(--border-color-primary);
+}
+
+/* Generic Sidebar Section Header Styling */
+.sidebar-section-title-area { /* Common container for project/announcement headers */
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    padding-top: 10px;
+    padding-left: 10px; /* Match project style */
+    border-bottom: 1px solid var(--border-color-primary);
+    border-top: 1px solid var(--border-color-primary);
+    flex-shrink: 0;
+}
+
+/* Specific container IDs if needed, or use the common class above */
+
+.projects-h2-wrapper,
+.announcements-h2-wrapper { /* Shared styling for H2 wrappers */
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.projects-h2-wrapper h2,
+.announcements-h2-wrapper h2 { /* Shared styling for H2 */
+    font-size: 0.9em;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    -webkit-user-select: none;
+    -moz-user-select: none;   
+    -ms-user-select: none;    
+    user-select: none;        
+}
+.projects-h2-wrapper h2 .fas,
+.announcements-h2-wrapper h2 .fas { /* Shared styling for H2 icons */
+    font-size: 1.1em;
+    color: var(--text-secondary);
+}
+
+.sidebar-actions-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.projects-h2-wrapper .sidebar-actions-group { /* Only projects H2 has actions */
+    display: flex; 
+}
+
+
+.sidebar-action-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: var(--border-radius-sm);
+    font-size: 0.9em;
+    line-height: 1;
+}
+.sidebar-action-btn:hover {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+/* Content Areas for Project and Announcement Lists */
+#pageTreeContainer, /* For Projects */
+#announcements-content-area /* For Announcements */
+{
+    flex-grow: 1;
+    overflow-y: auto;
+    font-size: 0.95em;
+    overflow-x: hidden;
+}
+
+/* Project and Announcement Lists (UL) */
+.project-list,
+.announcements-list {
+    list-style-type: none;
+    padding-left: 0;
+}
+
+/* Project and Announcement List Items (LI) */
+.project-item,
+.announcement-list-item {
+    margin-bottom: 3px;
+    position: relative;
+}
+
+/* Project and Announcement Item Headers (DIV inside LI) */
+.project-header,
+.announcement-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    cursor: pointer;
+    border-radius: var(--border-radius);
+    transition: background-color 0.15s ease, color 0.15s ease;
+    font-weight: 500;
+    color: var(--text-secondary);
+    position: relative;
+    width: 90%; /* To allow scrollbar space without shifting content */
+}
+.project-header:hover,
+.announcement-header:hover {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+/* Active Project/Announcement Item Styling */
+.project-item.active-project > .project-header,
+.announcement-list-item.active-announcement > .announcement-header {
+    background-color: rgba(46, 115, 232, 0.20); /* var(--accent-primary-bg-light) */
+    color: var(--accent-primary);
+}
+.project-item.active-project > .project-header .fas, /* All icons in active project header */
+.announcement-list-item.active-announcement > .announcement-header .fas { /* All icons in active announcement header */
+    color: var(--accent-primary);
+}
+
+/* Chevron Icons for Project/Announcement Items */
+.project-header .project-expand-icon,
+.announcement-header .announcement-expand-icon {
+    font-size: 0.8em;
+    width: 12px;
+    text-align: center;
+    transition: transform 0.15s ease;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+/* Type Icons (fa-book, fa-newspaper) for Project/Announcement Items */
+.project-header .fas:not(.project-expand-icon),
+.announcement-header .fas:not(.announcement-expand-icon) {
+    font-size: 0.9em;
+    width: 16px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+/* Name Text for Project/Announcement Items */
+.project-header .project-name-text,
+.announcement-header .announcement-name-text {
+    flex-grow: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    /* Adjust padding-right if actions are present (only for projects) */
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+.project-header .project-name-text {
+    padding-right: 45px; /* Space for hover actions in projects */
+}
+.announcement-header .announcement-name-text {
+    padding-right: 5px; /* Announcements have no hover actions on the item itself */
+}
+
+
+/* Action group on project item hover (not for announcements) */
+.project-header .sidebar-actions-group {
+    display: none;
+    position: absolute;
+    right: 5px;
+    top: 50%;
+    transform: translateY(-50%);
+    background-color: var(--bg-tertiary); /* Match item hover for seamless look */
+    padding: 3px 5px;
+    border-radius: var(--border-radius-sm);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    gap: 4px;
+}
+.project-header:hover .sidebar-actions-group {
+    display: flex;
+}
+.project-header .sidebar-actions-group .sidebar-action-btn {
+    font-size: 0.85em;
+}
+
+/* Page Containers (for project pages and announcement pages) */
+
+/* Unified rule for consistent indentation of all page lists (project and announcement) */
+.project-pages-container > ul,    /* Root page list for projects */
+.announcement-pages-container > ul, /* Root page list for announcements */
+.page-children-container {         /* Nested page lists (ULs with this class for both) */
+    list-style-type: none;
+    padding-left: 20px; /* UNIFORM INDENTATION STEP */
+    margin-top: 2px;
+}
+
+/* Page List Item (LI) - common for project and announcement pages */
+li.page { /* This class is added to both project and announcement page LIs */
+    margin-bottom: 2px;
+    position: relative;
+}
+li.page:not(.has-children) .page-expand-icon {
+    visibility: hidden;
+}
+
+/* Page Item Header (DIV inside li.page) - common for project and announcement pages */
+.page-item-header { 
+    display: flex;
+    align-items: center;
+    gap: 8px; 
+    padding: 7px 5px; 
+    cursor: pointer;
+    border-radius: var(--border-radius);
+    transition: background-color 0.15s ease, color 0.15s ease;
+    position: relative; 
+    color: var(--text-secondary); 
+    width: 90%; /* To allow scrollbar space without shifting content */
+}
+
+.page-item-header .page-expand-icon { /* Common for project/announcement page chevrons */
+    font-size: 0.8em;
+    width: 12px;
+    text-align: center;
+    transition: transform 0.15s ease;
+    flex-shrink: 0;
+    color: var(--text-secondary); 
+    cursor: pointer; 
+}
+
+.page-item-header .page-type-icon { /* Common for project/announcement page type icons */
+    color: var(--text-secondary); 
+    font-size: 0.9em;
+    width: 16px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.page-item-header .page-title-text { /* Common for project/announcement page titles */
+    flex-grow: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    /* Adjust padding-right based on whether actions group is complex or simple */
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+/* Specific padding for project pages vs announcement pages if action group size differs */
+li.page:not(.announcement-page-item) .page-item-header .page-title-text { /* Project page */
+    padding-right: 45px; /* Space for multiple hover actions */
+}
+li.page.announcement-page-item .page-item-header .page-title-text { /* Announcement page */
+    padding-right: 25px; /* Space for single "Peek" action */
+}
+
+
+.page-item-header:hover {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary); 
+}
+
+/* Active Page Item Styling (common for project and announcement pages) */
+li.page.active-page > .page-item-header { 
+    background-color: rgba(46, 115, 232, 0.15); 
+    color: var(--accent-primary); 
+    font-weight: 500;
+}
+li.page.active-page > .page-item-header .fas { /* Covers expand-icon and type-icon */
+    color: var(--accent-primary); 
+}
+
+/* Action Group on Page Item Hover (common structure, content varies) */
+.page-item-header .sidebar-actions-group {
+    display: none;
+    position: absolute;
+    right: 5px;
+    top: 50%;
+    transform: translateY(-50%);
+    background-color: var(--bg-tertiary); /* Match item hover */
+    padding: 3px 5px;
+    border-radius: var(--border-radius-sm);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    gap: 4px; /* Gap between buttons if multiple */
+}
+.page-item-header:hover .sidebar-actions-group {
+    display: flex;
+}
+.page-item-header .sidebar-actions-group .sidebar-action-btn {
+    font-size: 0.85em;
+}
+
+/* Placeholder message if no subpages/pages */
+.project-pages-container .no-subpages-message, 
+.announcement-pages-container .no-subpages-message,
+.page-children-container .no-subpages-message 
+{
+    font-style: italic;
+    color: var(--text-secondary);
+    padding: 5px 10px 5px 0px; 
+    font-size: 0.9em;
+    list-style-type: none; 
+}
+.no-items-message { /* For top-level lists if empty */
+    font-style: italic;
+    color: var(--text-secondary);
+    padding: 8px 10px;
+    font-size: 0.9em;
+    list-style-type: none;
+}
+.error-message { /* For error messages in lists */
+    color: var(--text-error);
+    padding: 8px 10px;
+    font-style: italic;
+    list-style-type: none;
+}
+
+
+/* -------------------- */
+/* --- ACTIONS MODAL --- */
+/* -------------------- */
+.modal { 
+    display: none; 
+    position: fixed; 
+    z-index: 1000; 
+    width: 240px; 
+}
+
+.modal-content { 
+    background-color: var(--bg-secondary); 
+    margin: 0; 
+    padding: 0; 
+    border: 1px solid var(--border-color-primary);
+    border-radius: var(--border-radius-md); 
+    width: 100%; 
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15); 
+    max-height: 350px; 
+    overflow-y: auto; 
+}
+
+#actions-modal-list {
+    list-style: none;
+    padding: 8px 0; 
+    margin: 0;
+}
+
+#actions-modal-list li {
+    padding: 10px 18px; 
+    cursor: pointer;
+    font-size: 0.9em; 
+    display: flex;
+    align-items: center;
+    gap: 12px; 
+}
+#actions-modal-list li:last-child {
+    border-bottom: none; 
+}
+
+#actions-modal-list li:hover {
+    background-color: var(--bg-tertiary);
+    color: var(--accent-primary);
+}
+#actions-modal-list li .fas {
+    width: 16px;
+    text-align: center;
+    color: var(--text-secondary); 
+}
+#actions-modal-list li:hover .fas {
+    color: var(--accent-primary); 
+}

@@ -1,43 +1,51 @@
 // main.js
 
-import { initSidePanel } from './sidePanel.js';
-import { initEditArea } from './editArea.js';
+import { initSidePanel } from './SDPNL/sidePanel.js';
+import { initEditArea } from './LEDR/editArea.js';
 import { initSlashCommand } from './SCMD/slashCommand.js';
-import { initHomepage } from './homePage.js'; // ADDED
-import { initTextStyleModal } from './textStyleModal.js';
-import { initTableEditor } from './tableEditor.js';
+import { initHomepage } from './homePage.js'; 
+import { initTextStyleModal } from './LEDR/textStyleModal.js';
+import { initTableEditor } from './LEDR/tableEditor.js';
 import { initEmojiModal } from './SCMD/emojiModal.js';
 import { initEmbedPageModal } from './SCMD/embedPageModal.js';
 import { initAuth } from './auth_client.js';
 import { initUserSettingsModal } from './userSettingsModal.js';
 import { initMoreOptionsModal } from './moreOptionsModal.js';
-import { initPagePeekModalSystem } from './pagePeekModal.js'; // ADDED
+import { initPagePeekModalSystem } from './LEDR/pagePeekModal.js'; 
 
 document.addEventListener('DOMContentLoaded', () => {
    const appContext = {
        // Auth State
-       currentUser: null, // { id, username }
+       currentUser: null, 
        
        // App State for the MAIN EDITOR
        currentProject: null,
-       currentPageState: null, // { id, title, originalMarkdown, versionHash }
+       currentPageState: null, // { id, title, originalMarkdown, versionHash, type?: 'announcement' | 'project' }
        hasUnsavedChanges: false,
-       isSaving: false, // Specific to main editor instance
-       autosaveTimeoutId: null, // Specific to main editor instance
+       isSaving: false, 
+       autosaveTimeoutId: null, 
+
+       // View & Context Management
+       currentView: 'home', // 'home' | 'projects' | 'project_detail' | 'announcements_list' | 'announcement_detail' | 'login'
+       currentAnnouncementContext: null, // { id, name } when in 'announcement_detail' (editor context)
 
        slashCommandInfo: null,
        isSlashCommandActive: false,
-       autosaveDelay: 3000, // Global config, can be passed to instances
+       autosaveDelay: 3000, 
 
-       // DOM Elements (Main editor specific)
-       pageTreeContainer: document.getElementById('page-tree'),
+       // DOM Elements
+       announcementsSectionHeader: document.getElementById('announcements-section-header'),
+       announcementsContentArea: document.getElementById('announcements-content-area'),
+       projectsSectionHeader: document.getElementById('projects-section-header'),
+       projectsContentArea: document.getElementById('pageTreeContainer'),
+
        userProfileAreaContainer: document.getElementById('user-profile-area-container'),
-       liveEditor: document.getElementById('live-editor'), // Main editor
-       savePageBtn: document.getElementById('save-page-btn'), // Main save button
-       currentPageDisplay: document.getElementById('current-page-display'), // Main page display
-       statusMessage: document.getElementById('status-message'), // Main status message
+       liveEditor: document.getElementById('live-editor'), 
+       savePageBtn: document.getElementById('save-page-btn'), 
+       currentPageDisplay: document.getElementById('current-page-display'), 
+       statusMessage: document.getElementById('status-message'), 
 
-       // Common Modals / UI elements (can be used by global context or passed)
+       // Common Modals / UI elements
        slashCommandModal: document.getElementById('slash-command-modal'),
        actionsModal: document.getElementById('actions-modal'),
        textStyleModal: document.getElementById('text-style-modal'),
@@ -49,36 +57,43 @@ document.addEventListener('DOMContentLoaded', () => {
        embedPageTreeContainer: null,
 
        // Page Peek Modal System
-       activePeekModals: [], // Will be managed by initPagePeekModalSystem
-       openPageInPeekMode: null, // Will be set by initPagePeekModalSystem
-       removePeekModal: null,    // Will be set by initPagePeekModalSystem
-       closeAllPeekModals: null, // Will be set by initPagePeekModalSystem
-       getTopPeekModal: null,    // Will be set by initPagePeekModalSystem
-       handlePeekModalLayoutChange: null, // Will be set by initPagePeekModalSystem
+       activePeekModals: [], 
+       openPageInPeekMode: null, 
+       removePeekModal: null,    
+       closeAllPeekModals: null, 
+       getTopPeekModal: null,    
+       handlePeekModalLayoutChange: null, 
 
 
-       // Core functions (some are for main editor, some are global utilities)
-       showStatus: null, // This will be the global showStatus
-       // Methods specific to main editor instance, will be populated by initEditArea
-       displayHomepage: null, // ADDED: For homepage module
-       clearHomepage: null,   // ADDED: For homepage module       
+       // Core functions
+       showStatus: null, 
+       displayHomepage: null, 
+       clearHomepage: null,   
        updateSaveButtonState: null, 
        clearEditor: null, 
-       loadPageContent: null,
+       loadPageContent: null, // For user project pages
        savePage: null,
        scheduleAutosave: null,
        performAutosave: null,
        
        // Global utility functions
-       htmlToMarkdown: null, // Will be set up
-       fetchWithAuth: null, // Will be set up
-       clientConverter: null, // Global showdown instance for main editor
-       DmpInstance: null, // Global DMP instance (if shared)
+       htmlToMarkdown: null, 
+       fetchWithAuth: null, 
+       clientConverter: null, 
+       DmpInstance: null, 
 
        // Side panel functions
-       fetchProjects: null,
-       fetchPageTree: null,
+       fetchProjects: null, // (isProjectLoad: boolean) => void
+       fetchPageTree: null, // For user projects
        createNewProject: null,
+       clearSidebarActiveStates: null, // From sidePanel
+
+       // Announcement related functions (from sidePanel.js then sideAnnouncement.js)
+       fetchAnnouncementsList: null, // New: Fetches and renders the list of announcements
+       // switchToAnnouncementsListView: null, // This role is partly taken by fetchAnnouncementsList or direct section rendering
+       selectAnnouncementHandler: null, // Handles clicking an announcement in the list
+       fetchAnnouncementPageTree: null, // Fetches page tree for a selected announcement
+       loadAnnouncementPageContent: null, // Loads announcement page into editor
        
        // Other modal/action handlers
        openActionsModal: null,
@@ -92,7 +107,7 @@ document.addEventListener('DOMContentLoaded', () => {
        removeSlashCommandTextFromEditor: null,
        closeSlashCommandModal: null,
 
-       slashCommandInstance: null, // For the main editor's SCMD instance
+       slashCommandInstance: null, 
        // Auth functions
        checkAuthStatus: null, 
        showLoginScreen: null, 
@@ -106,10 +121,10 @@ document.addEventListener('DOMContentLoaded', () => {
        deletePage: null,
        renamePage: null,
        duplicatePage: null,
+       renderCoreSidebarElements: null, // Add this for clarity, will be populated by sidePanel.js
    };
 
     appContext.fetchWithAuth = async (url, options = {}) => {
-        // ... (fetchWithAuth implementation remains the same) ...
         const token = localStorage.getItem('authToken');
         options.headers = {
             ...options.headers,
@@ -128,14 +143,18 @@ document.addEventListener('DOMContentLoaded', () => {
             console.warn(`Authentication error (${response.status}) for ${url}. Clearing token.`);
             localStorage.removeItem('authToken');
             appContext.currentUser = null;
+            appContext.currentView = 'login'; 
             
-            if(appContext.renderUserProfile) appContext.renderUserProfile(); 
-            if(appContext.pageTreeContainer) appContext.pageTreeContainer.innerHTML = '<p style="padding: 0 10px; font-size: 0.9em; color: var(--text-secondary);">Please log in to see projects.</p>';
-            const projectsHeadingContainer = document.getElementById('projects-heading-container');
-            if(projectsHeadingContainer) projectsHeadingContainer.innerHTML = ''; 
+            if(appContext.renderCoreSidebarElements) { 
+                appContext.renderCoreSidebarElements();
+            }
             
-            // Close any open peek modals as auth is lost
-            if(appContext.closeAllPeekModals) appContext.closeAllPeekModals(true); // Force close
+            if(appContext.announcementsSectionHeader) appContext.announcementsSectionHeader.innerHTML = '';
+            if(appContext.announcementsContentArea) appContext.announcementsContentArea.innerHTML = '<p style="padding: 0 10px; font-size: 0.9em; color: var(--text-secondary);">Please log in to see announcements.</p>';
+            if(appContext.projectsSectionHeader) appContext.projectsSectionHeader.innerHTML = '';
+            if(appContext.projectsContentArea) appContext.projectsContentArea.innerHTML = '<p style="padding: 0 10px; font-size: 0.9em; color: var(--text-secondary);">Please log in to see projects.</p>';
+            
+            if(appContext.closeAllPeekModals) appContext.closeAllPeekModals(true); 
 
             if (appContext.showLoginScreen) appContext.showLoginScreen();
             const errorData = await response.json().catch(() => ({ error: `Auth Error: ${response.status}` }));
@@ -145,9 +164,8 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
 
-   appContext.showStatus = (message, type = 'info', duration = 3000) => { // This is the GLOBAL status
+   appContext.showStatus = (message, type = 'info', duration = 3000) => { 
        if (!appContext.statusMessage) return;
-       // ... (global showStatus implementation remains the same) ...
        appContext.statusMessage.textContent = message;
        appContext.statusMessage.className = type;
 
@@ -167,12 +185,9 @@ document.addEventListener('DOMContentLoaded', () => {
        }
    };
 
-    // Initialize Turndown and Showdown, DmpInstance for global use
-    // ... (htmlToMarkdown setup remains the same) ...
     let turndownServiceInstance;
     if (typeof TurndownService === 'function') {
-        turndownServiceInstance = new TurndownService({ /* ... options ... */ });
-        // ... (addRule for strikethrough, taskListItems, etc.) ...
+        turndownServiceInstance = new TurndownService({ headingStyle: 'atx', codeBlockStyle: 'fenced', bulletListMarker: '-' });
         turndownServiceInstance.addRule('pWithOnlyBrToHTML', {
             filter: function (node) { return node.nodeName === 'P' && node.childNodes.length === 1 && node.firstChild.nodeName === 'BR'; },
             replacement: function () { return '<p><br></p>\n\n'; }
@@ -190,7 +205,7 @@ document.addEventListener('DOMContentLoaded', () => {
             replacement: function (content, node) {
                 const checkbox = node.firstChild;
                 const isChecked = checkbox.checked;
-                const newContent = content.replace(/^\s+/, ''); // Remove leading spaces before content
+                const newContent = content.replace(/^\s+/, ''); 
                 const parentList = node.parentNode;
                 let listItemPrefix = (parentList && parentList.nodeName === 'OL' ? (Array.from(parentList.children).indexOf(node) + 1) + '. ' : (turndownServiceInstance.options.bulletListMarker || '*') + ' ');
                 return listItemPrefix + (isChecked ? '[x] ' : '[ ] ') + newContent;
@@ -201,24 +216,25 @@ document.addEventListener('DOMContentLoaded', () => {
         appContext.htmlToMarkdown = (htmlString) => {
             if (!turndownServiceInstance) { return htmlString; }
             try {
-                let cleanedHtml = htmlString.replace(/\u00A0/g, ' '); // Replace non-breaking spaces
+                let cleanedHtml = htmlString.replace(/\u00A0/g, ' '); 
                 let markdown = turndownServiceInstance.turndown(cleanedHtml);
-                // Normalize newlines: remove triple+ newlines, ensure single trailing newline for non-empty.
                 markdown = markdown.replace(/\n{3,}/g, '\n\n').trim();
-                if (markdown) markdown += '\n'; // Add a single trailing newline if content exists
+                if (markdown) markdown += '\n'; 
                 return markdown;
             } catch (error) {
                 console.error("Turndown error:", error);
-                return `<!-- Turndown Error: ${error.message} -->\n${htmlString}`; // Return original on error
+                return `<!-- Turndown Error: ${error.message} -->\n${htmlString}`; 
             }
         };
     } else {
         console.error("TurndownService library not found.");
-        appContext.htmlToMarkdown = (htmlString) => { return htmlString; }; // Fallback
+        appContext.htmlToMarkdown = (htmlString) => { return htmlString; }; 
     }
 
     appContext.clientConverter = new showdown.Converter();
     appContext.clientConverter.setOption('tables', true);
+    appContext.clientConverter.setOption('tasklists', true);
+    appContext.clientConverter.setOption('strikethrough', true);
     
     if (typeof diff_match_patch === 'function') {
         appContext.DmpInstance = new diff_match_patch();
@@ -229,79 +245,88 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     appContext.logoutUser = async () => {
-        // ... (logoutUser implementation remains largely the same, but ensure it calls global clearEditor) ...
         const token = localStorage.getItem('authToken');
         if (token) {
             try {
                 await appContext.fetchWithAuth('/api/auth/logout', { method: 'POST' });
             } catch (error) {
-                console.warn("Error calling server logout (token might still be valid on server if blacklist used):", error.message);
+                // If fetchWithAuth itself throws 401/403, it will handle UI clearing.
+                // This catch is for other network errors during logout.
+                console.warn("Error calling server logout:", error.message);
             }
         }
 
         localStorage.removeItem('authToken');
         appContext.currentUser = null;
-        appContext.currentProject = null; // Clear global current project
-        appContext.currentPageState = null; // Clear global current page state
-        appContext.hasUnsavedChanges = false; // Reset global unsaved changes flag
+        appContext.currentProject = null; 
+        appContext.currentPageState = null; 
+        appContext.hasUnsavedChanges = false; 
+        appContext.currentView = 'login';
+        appContext.currentAnnouncementContext = null;
 
-        // Explicitly clear editor for logout, don't rely on clearEditor(true)
-        // which might try to show homepage if user context was briefly available.
+        if (appContext.renderCoreSidebarElements) { 
+            appContext.renderCoreSidebarElements();
+        }
+         
         if (appContext.liveEditor) {
             appContext.liveEditor.innerHTML = '';
-            appContext.liveEditor.contentEditable = 'true';
+            appContext.liveEditor.contentEditable = 'true'; 
             appContext.liveEditor.dataset.placeholder = "Type '/' for commands, or start writing...";
             appContext.liveEditor.classList.add('is-empty');
         }
-         if (appContext.currentPageDisplay) appContext.currentPageDisplay.textContent = 'No page selected';
-         if (appContext.savePageBtn) appContext.savePageBtn.disabled = true;
-         
-        // Clear user profile area
-        if (appContext.userProfileAreaContainer) {
-            appContext.userProfileAreaContainer.innerHTML = '';
-        }
+        if (appContext.currentPageDisplay) appContext.currentPageDisplay.textContent = 'No page selected';
+        if (appContext.savePageBtn) appContext.savePageBtn.disabled = true;
+        
+        if (appContext.announcementsSectionHeader) appContext.announcementsSectionHeader.innerHTML = '';
+        if (appContext.announcementsContentArea) appContext.announcementsContentArea.innerHTML = '<p style="padding: 0 10px; font-size: 0.9em; color: var(--text-secondary);">Please log in to see announcements.</p>';
+        if (appContext.projectsSectionHeader) appContext.projectsSectionHeader.innerHTML = '';
+        if (appContext.projectsContentArea) appContext.projectsContentArea.innerHTML = '<p style="padding: 0 10px; font-size: 0.9em; color: var(--text-secondary);">Please log in to see projects.</p>';
 
-        if (appContext.pageTreeContainer) appContext.pageTreeContainer.innerHTML = '<p style="padding: 0 10px; font-size: 0.9em; color: var(--text-secondary);">Please log in to see projects.</p>';
-        const projectsHeadingContainer = document.getElementById('projects-heading-container');
-        if(projectsHeadingContainer) projectsHeadingContainer.innerHTML = ''; 
-
-        if (appContext.closeAllPeekModals) appContext.closeAllPeekModals(true); // Force close peek modals
+        if (appContext.closeAllPeekModals) appContext.closeAllPeekModals(true); 
 
         if (appContext.showStatus) appContext.showStatus('Logged out successfully.', 'info');
         if (appContext.showLoginScreen) appContext.showLoginScreen();
     };
 
-   // Initialize modules
    initAuth(appContext); 
-   
-   // initEditArea for the MAIN editor instance.
-   // appContext itself serves as the "editorContext" for the main editor.
    initEditArea(appContext); 
-
-   initSidePanel(appContext); 
-   appContext.slashCommandInstance = initSlashCommand(appContext); // Initialize for main editor
+   initSidePanel(appContext); // This will define appContext.renderCoreSidebarElements
+   appContext.slashCommandInstance = initSlashCommand(appContext); 
    initTextStyleModal(appContext);
    initTableEditor(appContext);
    initEmojiModal(appContext);
    initMoreOptionsModal(appContext);
    initEmbedPageModal(appContext);
    initUserSettingsModal(appContext); 
-   initHomepage(appContext); // ADDED: Initialize the homepage system
-   initPagePeekModalSystem(appContext); // ADDED: Initialize the peek modal system
+   initHomepage(appContext); 
+   initPagePeekModalSystem(appContext); 
 
    window.addEventListener('beforeunload', (event) => {
        let unsavedInPeek = false;
        if (appContext.activePeekModals) {
-           // Check if any peek modal's SCMD is active and might have unconfirmed input
            const sCMDActiveInPeek = appContext.activePeekModals.some(
                modal => modal.isSlashCommandActive && modal.slashCommandInfo && modal.slashCommandInfo.textNode.textContent.substring(modal.slashCommandInfo.offset).length > 0
            );
-           if (sCMDActiveInPeek) { // If SCMD has pending input, consider it "unsaved" for this check
+           if (sCMDActiveInPeek) { 
                unsavedInPeek = true;
            }
-           unsavedInPeek = appContext.activePeekModals.some(modal => modal.hasUnsavedChanges && !modal.isMinimized);
+           // Only consider peek modal unsaved changes if it's not an announcement (read-only unless admin, but peek is always read-only for announcements)
+           unsavedInPeek = unsavedInPeek || appContext.activePeekModals.some(modal => modal.hasUnsavedChanges && !modal.isMinimized && modal.contextType !== 'announcement');
        }
-       if (appContext.hasUnsavedChanges || unsavedInPeek) {
+       
+       let mainEditorUnsaved = false;
+       if (appContext.hasUnsavedChanges && appContext.currentPageState) {
+           if (appContext.currentPageState.type === 'announcement') {
+               const isAdmin = appContext.currentUser && (appContext.currentUser.role === 'admin' || appContext.currentUser.role === 'owner');
+               if (isAdmin) {
+                   mainEditorUnsaved = true;
+               }
+           } else { // Project page
+               mainEditorUnsaved = true;
+           }
+       }
+
+       if (mainEditorUnsaved || unsavedInPeek) {
            event.preventDefault();
            event.returnValue = '';
            return 'You have unsaved changes. Are you sure you want to leave?';
@@ -310,27 +335,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     window.addEventListener('keydown', (event) => {
         if (event.key === 'Escape') {
-            // Do not let global Escape interfere if a SCMD is active in any editor
-            if (appContext.isSlashCommandActive) { // Main editor's SCMD
-                // Let the SCMD's own keydown handler deal with Escape
+            if (appContext.isSlashCommandActive) { 
                 return;
             }
             if (appContext.activePeekModals && appContext.activePeekModals.some(m => m.isSlashCommandActive)) {
-                // Let the SCMD's own keydown handler in the peek modal deal with Escape
                 return;
             }
 
-            // Prioritize closing the topmost, non-minimized peek modal
             const topPeekModal = appContext.getTopPeekModal ? appContext.getTopPeekModal() : null;
             if (topPeekModal && topPeekModal.domElement.style.display !== 'none' && !topPeekModal.isMinimized) {
-                if (topPeekModal.close) topPeekModal.close(); // Attempt to close it (might ask for confirmation)
-                return; // Stop further Escape processing
+                if (topPeekModal.close) topPeekModal.close(); 
+                return; 
             }
-            // Then other modals as before
             if (appContext.actionsModal && appContext.actionsModal.style.display !== 'none') {
                 appContext.actionsModal.style.display = 'none';
             }
-            if (appContext.userSettingsModal && appContext.userSettingsModal.style.display !== 'none' && appContext.closeUserSettingsModal) { // Check if modal is closable
+            if (appContext.userSettingsModal && appContext.userSettingsModal.style.display !== 'none' && appContext.closeUserSettingsModal) { 
                 appContext.closeUserSettingsModal();
             }
             if (appContext.embedPageModal && appContext.embedPageModal.style.display !== 'none') { 
@@ -358,23 +378,45 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
    if (appContext.checkAuthStatus) {
-        appContext.checkAuthStatus() // This often triggers sidePanel's fetchProjectsAndDisplay
+        appContext.checkAuthStatus() 
             .then(() => {
-                // After auth is checked and initial project/page load MIGHT have happened...
-                if (appContext.currentUser && !appContext.currentProject && !appContext.currentPageState && appContext.displayHomepage) {
-                    // If user is logged in, but NO project is active (e.g., user has no projects, or initial load failed)
-                    // and no page is loaded, then display the main homepage.
-                    appContext.displayHomepage();
+                if (appContext.renderCoreSidebarElements) { 
+                    appContext.renderCoreSidebarElements();
                 }
+
+                if (appContext.currentUser) { 
+                    if (appContext.currentView === 'home' && !appContext.currentProject && !appContext.currentPageState && !appContext.currentAnnouncementContext) {
+                        if (appContext.displayHomepage) { // displayHomepage should trigger project list load
+                            appContext.displayHomepage();
+                        }
+                        // Also load initial announcements list
+                        if (appContext.fetchAnnouncementsList) {
+                            appContext.fetchAnnouncementsList();
+                        }
+                    } else if (appContext.currentView === 'projects' && appContext.fetchProjects) {
+                        // This path might be less common now as home usually calls fetchProjects
+                        // appContext.fetchProjects(); 
+                        // If we are already in a project view, also ensure announcements list is loaded if desired default state
+                         if (appContext.fetchAnnouncementsList) {
+                            appContext.fetchAnnouncementsList();
+                        }
+                    }
+                }
+            })
+            .catch(error => {
+                console.error("Error during initial auth check:", error);
+                if (appContext.renderCoreSidebarElements) {
+                    appContext.renderCoreSidebarElements(); 
+                }
+                if (appContext.showLoginScreen) appContext.showLoginScreen();
             });
    } else {
        console.error("checkAuthStatus function not initialized. Auth will not work.");
        if (appContext.showLoginScreen) appContext.showLoginScreen(); 
    }
 
-   // Register Service Worker (Add this section)
    if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => { // Use 'load' to register SW after page content is loaded
+        window.addEventListener('load', () => { 
             navigator.serviceWorker.register('/service-worker.js')
                 .then(registration => {
                     console.log('Service Worker registered successfully with scope:', registration.scope);
@@ -385,4 +427,3 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
-// --- END OF FILE main.js ---

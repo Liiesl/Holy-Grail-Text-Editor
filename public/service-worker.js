@@ -1,4 +1,4 @@
-const CACHE_NAME = 'holy-grail-editor-v2.1'; // Increment version to force update/re-cache
+const CACHE_NAME = 'holy-grail-editor-v2.4.8'; // Increment version to force update/re-cache
 const STATIC_ASSETS_TO_CACHE = [
   '/',
   '/index.html',

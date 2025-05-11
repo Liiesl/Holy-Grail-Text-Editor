@@ -9,15 +9,45 @@ export const createSubpageCommand = {
     description: 'Create a new subpage and link it',
     category: 'Pages',
     canExecute: (appContext) => {
-        return !!(appContext.currentProject && appContext.currentPageState);
+        // --- START MODIFICATION ---
+        const isProjectContext = !!(appContext.currentProject && appContext.currentPageState);
+        const isUserAdmin = appContext.currentUser && (appContext.currentUser.role === 'admin' || appContext.currentUser.role === 'owner');
+        const isAnnouncementContext = isUserAdmin &&
+                                      appContext.currentAnnouncementContext &&
+                                      appContext.currentPageState &&
+                                      appContext.currentPageState.type === 'announcement';
+        return isProjectContext || isAnnouncementContext;
+        // --- END MODIFICATION ---
     },
     execute: async (appContext, { selection, range }) => {
-        const { liveEditor, showStatus, currentProject, currentPageState, fetchPageTree, fetchWithAuth } = appContext;
+        // --- START MODIFICATION ---
+        const {
+            liveEditor,
+            showStatus,
+            currentProject,
+            currentPageState,
+            currentAnnouncementContext,
+            fetchPageTree, // For projects
+            fetchAnnouncementPageTree, // For announcements
+            fetchWithAuth
+        } = appContext;
 
-        if (!currentProject || !currentPageState) {
+        const isUserAdmin = appContext.currentUser && (appContext.currentUser.role === 'admin' || appContext.currentUser.role === 'owner');
+        const isAnnouncementMode = isUserAdmin && currentAnnouncementContext && currentPageState && currentPageState.type === 'announcement';
+
+        if (!currentPageState) {
             showStatus('Cannot create subpage: No parent page loaded.', 'error');
-            return false; // Indicate command failed or should not proceed with default cleanup
+            return true; // Allow default cleanup
         }
+        if (isAnnouncementMode && !currentAnnouncementContext.id) {
+            showStatus('Cannot create subpage: Announcement context is invalid.', 'error');
+            return true;
+        }
+        if (!isAnnouncementMode && !currentProject) {
+            showStatus('Cannot create subpage: Project context is invalid.', 'error');
+            return true;
+        }
+        // --- END MODIFICATION ---
 
         const subpageTitle = prompt('Enter title for the new subpage:');
         if (!subpageTitle || !subpageTitle.trim()) {
@@ -25,15 +55,29 @@ export const createSubpageCommand = {
         }
 
         try {
-            const response = await fetchWithAuth(`/api/project/${currentProject}/pages`, {
+            // --- START MODIFICATION ---
+            let apiUrl;
+            let payload;
+            let contextId; // project name or announcement ID
+
+            if (isAnnouncementMode) {
+                apiUrl = `/api/admin/announcements/${currentAnnouncementContext.id}/pages`;
+                payload = { title: subpageTitle.trim(), parentId: currentPageState.id };
+                contextId = currentAnnouncementContext.id;
+            } else { // Project mode
+                apiUrl = `/api/project/${currentProject}/pages`;
+                payload = { title: subpageTitle.trim(), parentId: currentPageState.id };
+                contextId = currentProject;
+            }
+
+            const response = await fetchWithAuth(apiUrl, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' }, // fetchWithAuth will add Auth header
-                body: JSON.stringify({ title: subpageTitle.trim(), parentId: currentPageState.id })
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
             });
+            // --- END MODIFICATION ---
 
             if (!response.ok) {
-                // fetchWithAuth handles 401/403 by throwing and showing login.
-                // This handles other server errors (400, 404, 500 etc.)
                 const errData = await response.json().catch(() => ({ error: 'Unknown server error' }));
                 throw new Error(errData.error || `HTTP error! status: ${response.status}`);
             }
@@ -41,26 +85,45 @@ export const createSubpageCommand = {
 
             liveEditor.focus();
             const sel = window.getSelection();
-            if (sel && range) { // range is from before slash command UI was removed
+            if (sel && range) {
                 sel.removeAllRanges();
                 sel.addRange(range);
             }
-            
-            const linkHTML = `<a href="page://${result.newPageId}">${result.title}</a> `; // use  
+
+            const linkHTML = `<a href="page://${result.newPageId}">${result.title}</a> `; // Use   (non-breaking space)
             document.execCommand('insertHTML', false, linkHTML);
-            
+
             showStatus(`Subpage "${result.title}" created and linked.`, 'success');
-            
-            if (fetchPageTree) {
-                await fetchPageTree(currentProject /*, result.newPageId */); 
+
+            // --- START MODIFICATION ---
+            if (isAnnouncementMode) {
+                if (fetchAnnouncementPageTree && appContext.announcementsContentArea) {
+                    // Need to find the container for the specific announcement's tree
+                    const annItemLi = appContext.announcementsContentArea.querySelector(`.announcement-list-item[data-announcement-id="${CSS.escape(contextId)}"]`);
+                    const pagesContainer = annItemLi?.querySelector('.announcement-pages-container');
+                    if (pagesContainer && annItemLi && annItemLi.classList.contains('expanded')) {
+                         // Reload tree and then load the new page.
+                        await fetchAnnouncementPageTree(contextId, currentAnnouncementContext.name, pagesContainer, false);
+                        if (appContext.loadAnnouncementPageContent) {
+                            await appContext.loadAnnouncementPageContent(contextId, result.newPageId, currentAnnouncementContext.name);
+                        }
+                    } else if (annItemLi && appContext.selectAnnouncementHandler) {
+                        // If tree not expanded, select announcement to load tree and root, then load new page if not root
+                        await appContext.selectAnnouncementHandler(contextId, currentAnnouncementContext.name, annItemLi);
+                        if (result.newPageId !== annItemLi.dataset.rootPageId && appContext.loadAnnouncementPageContent) {
+                            await appContext.loadAnnouncementPageContent(contextId, result.newPageId, currentAnnouncementContext.name);
+                        }
+                    }
+                }
+            } else { // Project mode
+                if (fetchPageTree) {
+                    await fetchPageTree(contextId, result.newPageId); // Load new page after tree refresh
+                }
             }
+            // --- END MODIFICATION ---
             return true; // Command succeeded, allow default cleanup.
         } catch (error) {
-            // This will catch errors from fetchWithAuth (e.g. auth failure)
-            // or from the !response.ok check above.
             console.error('Error creating subpage via slash command:', error);
-            // If fetchWithAuth showed login, this status might be for a logged-out user, which is fine.
-            // If it's another error, it's relevant.
             showStatus(`Failed to create subpage: ${error.message}`, 'error');
             return true; // Error occurred, but allow default cleanup.
         }
@@ -75,34 +138,41 @@ export const embedPageCommand = {
     text: 'Embed Page',
     description: 'Link an existing page',
     category: 'Pages',
+    canExecute: (appContext) => { // Added canExecute for consistency, though it's always true if command is available
+        return !!(appContext.openEmbedPageModal && appContext.currentProject); // Primarily for project context
+    },
     execute: (appContext, { slashCmdFinalRect, selection, range, currentSearchQuery, originalSlashCommandInfo }) => {
         const { liveEditor, openEmbedPageModal, closeEmbedPageModal, showStatus, removeSlashCommandTextFromEditor, closeSlashCommandModal } = appContext;
 
+        // Ensure we are in a project context for embedding general project pages
+        if (!appContext.currentProject) {
+            if (showStatus) showStatus('Embed Page command is for project pages.', 'info');
+             if (removeSlashCommandTextFromEditor && originalSlashCommandInfo) {
+                removeSlashCommandTextFromEditor(originalSlashCommandInfo, currentSearchQuery);
+            }
+            if (closeSlashCommandModal) {
+                closeSlashCommandModal();
+                appContext.slashCommandInfo = null;
+            }
+            return true;
+        }
+
+
         if (openEmbedPageModal) {
             openEmbedPageModal(
-                (selectedPage) => { // This is the callback on page selection from embedPageModal
-                    // 1. Close the embedPageModal itself
+                (selectedPage) => { 
                     if (closeEmbedPageModal) closeEmbedPageModal();
 
                     if (selectedPage && selectedPage.pageId && selectedPage.pageTitle) {
-                        // 2. Clean up slash command text from editor
                         if (removeSlashCommandTextFromEditor && originalSlashCommandInfo) {
                             removeSlashCommandTextFromEditor(originalSlashCommandInfo, currentSearchQuery);
                         }
 
-                        // 3. Insert the link
-                        liveEditor.focus(); // Ensure editor is focused
+                        liveEditor.focus(); 
                         const sel = window.getSelection();
-                        if (sel && range) { // Restore selection to where slash command was invoked
-                                            // This range was captured *before* any slash text removal attempts by slashCommand.js
-                                            // or after its own removal if we did that (but we deferred)
+                        if (sel && range) { 
                             sel.removeAllRanges();
-                            sel.addRange(range.cloneRange()); // Use a clone of the original range
-
-                            // Adjust range if text removal happened before this point and affected it.
-                            // For simplicity, we assume 'range' is still valid relative to the state *before* slash command input.
-                            // The removeSlashCommandTextFromEditor should have updated the DOM,
-                            // and this range is now where the link should be inserted.
+                            sel.addRange(range.cloneRange()); 
                         }
 
                         const linkHTML = `<a href="page://${selectedPage.pageId}">${selectedPage.pageTitle}</a> `;
@@ -110,21 +180,17 @@ export const embedPageCommand = {
                         liveEditor.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
                     }
                     
-                    // 4. Close the slash command modal and reset its state
                     if (closeSlashCommandModal) {
                          closeSlashCommandModal();
-                         // After slash command modal is closed, fully reset its related state in appContext
                          appContext.slashCommandInfo = null; 
-                         // searchQuery in slashCommand.js scope will be reset on next slash activation
                     }
                 },
-                slashCmdFinalRect,      // anchorRect for embedPageModal
-                currentSearchQuery      // initialQuery for embedPageModal filter
+                slashCmdFinalRect,      
+                currentSearchQuery      
             );
-            return false; // Indicate to slashCommand.js that execution is async and it shouldn't do default cleanup.
+            return false; 
         } else {
             showStatus('Embed page functionality is not available.', 'error');
-            // Cleanup slash command UI if modal can't open
             if (removeSlashCommandTextFromEditor && originalSlashCommandInfo) {
                 removeSlashCommandTextFromEditor(originalSlashCommandInfo, currentSearchQuery);
             }
@@ -132,44 +198,65 @@ export const embedPageCommand = {
                 closeSlashCommandModal();
                 appContext.slashCommandInfo = null;
             }
-            return true; // Standard cleanup because the command effectively failed to launch its UI.
+            return true; 
         }
     }
 };
 
-export const openInPagePeekCommand = { // NEW COMMAND
+export const openInPagePeekCommand = { 
     command: 'open-in-peek',
     short: ['peek', 'op', 'openpeek', 'viewpeek'],
     icon: 'command-icon',
-    iconClass: 'fas fa-window-restore', // Icon for peeking or opening in a new view
+    iconClass: 'fas fa-window-restore', 
     text: 'Open in Page Peek',
     description: 'Open the current page in a peek window',
     category: 'Pages',
     canExecute: (appContext) => {
-        // Command can execute if a page is loaded in the main editor and peek functionality is available
-        return !!(appContext.currentPageState && appContext.currentPageState.id && appContext.openPageInPeekMode);
+        // --- START MODIFICATION ---
+        const isProjectContext = appContext.currentPageState &&
+                                 appContext.currentPageState.id &&
+                                 appContext.currentProject && // Ensure it's a project
+                                 appContext.currentPageState.type !== 'announcement' && // Not an announcement
+                                 appContext.openPageInPeekMode;
+
+        const isAnnouncementContext = appContext.currentPageState &&
+                                      appContext.currentPageState.id &&
+                                      appContext.currentAnnouncementContext && // Ensure it's an announcement
+                                      appContext.currentPageState.type === 'announcement' &&
+                                      appContext.openPageInPeekMode;
+        
+        return isProjectContext || isAnnouncementContext;
+        // --- END MODIFICATION ---
     },
-    execute: (appContext, options) => { // options contains: { currentBlock, selection, range, slashCmdFinalRect, originalSlashCommandInfo, currentSearchQuery }
-        const { currentPageState, currentProject, openPageInPeekMode, showStatus } = appContext;
+    execute: (appContext, options) => { 
+        // --- START MODIFICATION ---
+        const { currentPageState, currentProject, currentAnnouncementContext, openPageInPeekMode, showStatus } = appContext;
 
         if (!currentPageState || !currentPageState.id) {
-            if (showStatus) showStatus('Cannot open in peek: No current page loaded in the main editor.', 'error');
-            return true; // Allow default slash command cleanup; command effectively failed.
+            if (showStatus) showStatus('Cannot open in peek: No current page loaded.', 'error');
+            return true; 
         }
         if (!openPageInPeekMode) {
             if (showStatus) showStatus('Cannot open in peek: Page peek functionality is not available.', 'error');
-            return true; // Allow default slash command cleanup; command effectively failed.
+            return true; 
         }
 
-        // Open the current main editor page in a new peek modal
-        openPageInPeekMode(currentPageState.id, currentProject);
-        
-        // No specific message needed on success, as the peek window opening is the feedback.
-        // Optionally, show a status:
-        // if (showStatus) showStatus(`Page "${currentPageState.title}" opened in peek window.`, 'success', 2000);
+        let contextId;
+        let pageType;
 
-        // Return true to indicate that standard slash command cleanup should proceed
-        // (i.e., remove slash text, close slash command modal).
+        if (currentPageState.type === 'announcement' && currentAnnouncementContext) {
+            contextId = currentAnnouncementContext.id;
+            pageType = 'announcement';
+        } else if (currentProject && currentPageState.type !== 'announcement') { // Assume project if not announcement
+            contextId = currentProject;
+            pageType = 'project';
+        } else {
+            if (showStatus) showStatus('Cannot open in peek: Page context is unclear.', 'error');
+            return true;
+        }
+        
+        openPageInPeekMode(currentPageState.id, contextId, pageType);
+        // --- END MODIFICATION ---
         return true;
     }
 };
