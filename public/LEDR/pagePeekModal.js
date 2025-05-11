@@ -1,4 +1,4 @@
-import { initEditArea } from '../editArea.js'; // Adjust path as needed
+import { initEditArea } from '../LEDR/editArea.js'; // Adjust path as needed
 import { initSlashCommand } from '../SCMD/slashCommand.js'; // ADDED: For Slash Command
 
 let DmpInstanceForModals = null;

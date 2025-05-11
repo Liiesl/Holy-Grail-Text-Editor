@@ -139,9 +139,20 @@ export function initEditArea(editorContext) {
         let requestBodyPayload;
         let targetMarkdownForStateUpdate;
 
+        // MODIFICATION: Declare editorStillOnPage in the function scope
+        let editorStillOnPage = false;
+
+        const prepareFullSavePayload = (markdownContent, baseVersionHash) => {
+            const payload = { markdown: markdownContent };
+            if (baseVersionHash) {
+                payload.base_version_hash = baseVersionHash;
+            }
+            return payload;
+        };
+
         if (isAutosave && preparedSaveData) {
             targetMarkdownForStateUpdate = preparedSaveData.targetMarkdown;
-            if (preparedSaveData.type === 'patch' && currentDmpInstance && preparedSaveData.baseVersion && !isAnnouncementPage) { // Patching for projects only for now
+            if (preparedSaveData.type === 'patch' && currentDmpInstance && preparedSaveData.baseVersion && !isAnnouncementPage) { // Patching for projects only
                 mode = 'patch';
                 requestBodyPayload = {
                     patch_text: preparedSaveData.data, 
@@ -150,9 +161,6 @@ export function initEditArea(editorContext) {
             } else { 
                 mode = 'full';
                 requestBodyPayload = { markdown: preparedSaveData.data }; 
-                if (isAnnouncementPage && editorContext.currentPageState.versionHash) { // Send base hash for announcements if available for optimistic lock
-                     // requestBodyPayload.base_version_hash = editorContext.currentPageState.versionHash; // Backend admin route might need this
-                }
             }
         } else { 
             const currentHtml = liveEditor.innerHTML;
@@ -179,11 +187,8 @@ export function initEditArea(editorContext) {
 
             if (isAnnouncementPage && isUserAdmin()) {
                 mode = 'full';
-                requestBodyPayload = { markdown: targetMarkdownForStateUpdate };
-                // if (editorContext.currentPageState.versionHash) {
-                //     requestBodyPayload.base_version_hash = editorContext.currentPageState.versionHash;
-                // }
-                console.log(`Attempting FULL content save for ANNOUNCEMENT ${contextId}/${pageIdBeingSaved}.`);
+                requestBodyPayload = prepareFullSavePayload(targetMarkdownForStateUpdate, editorContext.currentPageState.versionHash);
+                console.log(`Attempting FULL content save for ANNOUNCEMENT ${contextId}/${pageIdBeingSaved} (manual). Base hash: ${requestBodyPayload.base_version_hash || 'N/A'}`);
             } else if (!isAnnouncementPage) { // Project page
                 if (currentDmpInstance && editorContext.currentPageState.versionHash && editorContext.currentPageState.originalMarkdown !== null) {
                     mode = 'patch';
@@ -195,11 +200,11 @@ export function initEditArea(editorContext) {
                         patch_text: patchText,
                         base_version_hash: editorContext.currentPageState.versionHash
                     };
-                    console.log(`Attempting PATCH save for project ${contextId}/${pageIdBeingSaved}. Base hash: ${editorContext.currentPageState.versionHash}`);
+                    console.log(`Attempting PATCH save for project ${contextId}/${pageIdBeingSaved} (manual). Base hash: ${editorContext.currentPageState.versionHash}`);
                 } else {
                     mode = 'full';
-                    requestBodyPayload = { markdown: targetMarkdownForStateUpdate };
-                    console.log(`Attempting FULL content save for project ${contextId}/${pageIdBeingSaved}. (No DmpInstance, versionHash, or originalMarkdown)`);
+                    requestBodyPayload = prepareFullSavePayload(targetMarkdownForStateUpdate, null); // Project full saves historically don't send hash
+                    console.log(`Attempting FULL content save for project ${contextId}/${pageIdBeingSaved} (manual). (No DmpInstance, versionHash, or originalMarkdown, or not patching)`);
                 }
             } else {
                 console.error("_savePageContent: Could not determine save parameters.");
@@ -247,16 +252,30 @@ export function initEditArea(editorContext) {
                 body: JSON.stringify(requestBodyPayload)
             });
 
-            if (response.status === 409 && mode === 'patch' && !isAnnouncementPage) { // Patch conflict only for projects for now
-                 if (editorContext.currentPageState && editorContext.currentPageState.id === pageIdBeingSaved && editorContext.currentProject === contextId) {
-                    editorContext.showStatus(`Save conflict: Page was modified elsewhere. Your next save will overwrite.`, 'error', 5000);
-                    editorContext.currentPageState.versionHash = null; 
+            // MODIFICATION: Assign to the hoisted editorStillOnPage
+            // This check reflects if the editor is still on the page/context that was being saved,
+            // *at the time the response is being handled*.
+            editorStillOnPage = editorContext.currentPageState && editorContext.currentPageState.id === pageIdBeingSaved &&
+                                         ((isAnnouncementPage && editorContext.currentAnnouncementContext && editorContext.currentAnnouncementContext.id === contextId) ||
+                                          (!isAnnouncementPage && editorContext.currentProject === contextId));
+
+            // Generic 409 conflict handling
+            if (response.status === 409) {
+                const errData = await response.json().catch(() => ({ error: "Conflict detected." }));
+                
+                if (editorStillOnPage) { // Use the hoisted and now assigned variable
+                    editorContext.showStatus(errData.error || `Save conflict: Page was modified elsewhere. Your next save will overwrite.`, 'error', 5000);
+                    // Ensure currentPageState exists before modifying
+                    if (editorContext.currentPageState) {
+                        editorContext.currentPageState.versionHash = null; 
+                    }
                 } else {
                      console.warn(`Save conflict for ${contextId}/${pageIdBeingSaved}, but page context changed for this editor instance.`);
                 }
-                return false; 
+                editorContext.isSaving = false;
+                if (editorContext.updateSaveButtonState) editorContext.updateSaveButtonState();
+                return false;
             }
-            // TODO: Handle 409 for admin announcement save if backend implements optimistic locking with base_version_hash
 
             if (!response.ok)  {
                  const errData = await response.json().catch(() => ({}));
@@ -264,47 +283,47 @@ export function initEditArea(editorContext) {
             }
             const result = await response.json(); 
             
-            const editorStillOnPage = editorContext.currentPageState && editorContext.currentPageState.id === pageIdBeingSaved &&
-                                     ((isAnnouncementPage && editorContext.currentAnnouncementContext && editorContext.currentAnnouncementContext.id === contextId) ||
-                                      (!isAnnouncementPage && editorContext.currentProject === contextId));
-
+            // editorStillOnPage is already set from above.
             if (editorStillOnPage) {
                 editorContext.showStatus(isAutosave ? 'All changes saved.' : (result.message || 'Page saved!'), 'success', isAutosave ? 2000: 2500);
             
-                editorContext.currentPageState.originalMarkdown = result.newMarkdown; 
-                editorContext.currentPageState.versionHash = result.newVersionHash;
+                // Ensure currentPageState exists before modifying
+                if (editorContext.currentPageState) {
+                    editorContext.currentPageState.originalMarkdown = result.newMarkdown; 
+                    editorContext.currentPageState.versionHash = result.newVersionHash;
 
-                if (result.newTitle && result.newTitle !== editorContext.currentPageState.title) {
-                    editorContext.currentPageState.title = result.newTitle;
-                    if (currentPageDisplay) {
-                        if (isAnnouncementPage && editorContext.currentAnnouncementContext) {
-                             currentPageDisplay.textContent = `Announcement: ${editorContext.currentAnnouncementContext.name} > ${result.newTitle}`;
-                        } else if (!isAnnouncementPage && editorContext.currentProject) { // project page
-                             currentPageDisplay.textContent = `${editorContext.currentProject} > ${result.newTitle}`;
+                    if (result.newTitle && result.newTitle !== editorContext.currentPageState.title) {
+                        editorContext.currentPageState.title = result.newTitle;
+                        if (currentPageDisplay) {
+                            if (isAnnouncementPage && editorContext.currentAnnouncementContext) {
+                                 currentPageDisplay.textContent = `Announcement: ${editorContext.currentAnnouncementContext.name} > ${result.newTitle}`;
+                            } else if (!isAnnouncementPage && editorContext.currentProject) { // project page
+                                 currentPageDisplay.textContent = `${editorContext.currentProject} > ${result.newTitle}`;
+                            }
+                        }
+                        
+                        if (isAnnouncementPage && globalAppContext && globalAppContext.fetchAnnouncementPageTree && announcementsContentArea && editorContext.currentAnnouncementContext) {
+                            const annItemLi = announcementsContentArea.querySelector(`.announcement-list-item[data-announcement-id="${CSS.escape(editorContext.currentAnnouncementContext.id)}"]`);
+                            const pagesContainer = annItemLi?.querySelector('.announcement-pages-container');
+                            if (pagesContainer && annItemLi.classList.contains('expanded')) {
+                                await globalAppContext.fetchAnnouncementPageTree(editorContext.currentAnnouncementContext.id, editorContext.currentAnnouncementContext.name, pagesContainer, false);
+                                const activeLi = pagesContainer.querySelector(`li.page[data-page-id="${CSS.escape(editorContext.currentPageState.id)}"]`);
+                                if (activeLi) activeLi.classList.add('active-page');
+                            }
+                        } else if (!isAnnouncementPage && globalAppContext && globalAppContext.fetchPageTree && pageTreeContainer) { 
+                            await globalAppContext.fetchPageTree(contextId, editorContext.currentPageState.id); 
                         }
                     }
                     
-                    if (isAnnouncementPage && globalAppContext && globalAppContext.fetchAnnouncementPageTree && announcementsContentArea && editorContext.currentAnnouncementContext) {
-                        const annItemLi = announcementsContentArea.querySelector(`.announcement-list-item[data-announcement-id="${CSS.escape(editorContext.currentAnnouncementContext.id)}"]`);
-                        const pagesContainer = annItemLi?.querySelector('.announcement-pages-container');
-                        if (pagesContainer && annItemLi.classList.contains('expanded')) {
-                            await globalAppContext.fetchAnnouncementPageTree(editorContext.currentAnnouncementContext.id, editorContext.currentAnnouncementContext.name, pagesContainer, false);
-                            const activeLi = pagesContainer.querySelector(`li.page[data-page-id="${CSS.escape(editorContext.currentPageState.id)}"]`);
-                            if (activeLi) activeLi.classList.add('active-page');
-                        }
-                    } else if (!isAnnouncementPage && globalAppContext && globalAppContext.fetchPageTree && pageTreeContainer) { 
-                        await globalAppContext.fetchPageTree(contextId, editorContext.currentPageState.id); 
-                    }
-                }
-                
-                const veryCurrentHtml = liveEditor.innerHTML;
-                const veryCurrentMarkdown = htmlToMarkdown(veryCurrentHtml);
+                    const veryCurrentHtml = liveEditor.innerHTML;
+                    const veryCurrentMarkdown = htmlToMarkdown(veryCurrentHtml);
 
-                if (veryCurrentMarkdown === result.newMarkdown) {
-                    editorContext.hasUnsavedChanges = false;
-                } else {
-                    editorContext.hasUnsavedChanges = true; 
-                    console.warn("Content diverged slightly after save, marking as unsaved. This might be due to HTML to Markdown conversion nuances or rapid edits.");
+                    if (veryCurrentMarkdown === result.newMarkdown) {
+                        editorContext.hasUnsavedChanges = false;
+                    } else {
+                        editorContext.hasUnsavedChanges = true; 
+                        console.warn("Content diverged slightly after save, marking as unsaved. This might be due to HTML to Markdown conversion nuances or rapid edits.");
+                    }
                 }
             } else {
                 console.log(`Save successful for ${contextId}/${pageIdBeingSaved}, but editor context has changed. UI not updated for that save.`);
@@ -312,22 +331,29 @@ export function initEditArea(editorContext) {
             return true;
 
         } catch (error) {
+            // editorStillOnPage (the hoisted variable) will have the value set in try (if reached) or its initial 'false'.
             if (error.message && !error.message.toLowerCase().includes('auth error')) {
                 console.error('Error saving page in editor instance:', error);
-                 if (editorStillOnPage) {
+                 if (editorStillOnPage) { // Use hoisted variable
                     editorContext.showStatus(`Failed to save page. ${error.message}`, 'error', 5000);
                 }
             }
-            const checkAfterFailHtml = liveEditor.innerHTML;
-            const checkAfterFailMarkdown = htmlToMarkdown(checkAfterFailHtml);
-            if (editorContext.currentPageState && checkAfterFailMarkdown !== editorContext.currentPageState.originalMarkdown) {
-                 editorContext.hasUnsavedChanges = true;
+            // Ensure currentPageState exists before check
+            if (editorContext.currentPageState) {
+                const checkAfterFailHtml = liveEditor.innerHTML;
+                const checkAfterFailMarkdown = htmlToMarkdown(checkAfterFailHtml);
+                if (checkAfterFailMarkdown !== editorContext.currentPageState.originalMarkdown) {
+                     editorContext.hasUnsavedChanges = true;
+                } else {
+                     editorContext.hasUnsavedChanges = false;
+                }
             } else {
-                 editorContext.hasUnsavedChanges = false;
+                editorContext.hasUnsavedChanges = false; // Or true, if appropriate when no current page state
             }
             return false;
         } finally {
              editorContext.isSaving = false; 
+            // MODIFICATION: editorStillOnPage is now accessible here
             if (editorStillOnPage) {
                 if (editorContext.updateSaveButtonState) editorContext.updateSaveButtonState();
                 if (editorContext.hasUnsavedChanges && editorContext.scheduleAutosave) {
@@ -412,10 +438,10 @@ export function initEditArea(editorContext) {
         let preparedSaveData;
         if (isAnnouncement && isUserAdmin()) {
             preparedSaveData = {
-                type: 'full',
+                type: 'full', // Announcements use full save for admin route
                 data: newMarkdown, 
-                targetMarkdown: newMarkdown
-                // baseVersion: editorContext.currentPageState.versionHash // if backend uses for announcements
+                targetMarkdown: newMarkdown,
+                baseVersion: editorContext.currentPageState.versionHash // Pass current hash for optimistic locking
             };
         } else if (!isAnnouncement) { // Project page
             if (currentDmpInstance && editorContext.currentPageState.versionHash && editorContext.currentPageState.originalMarkdown !== null) {
@@ -433,6 +459,7 @@ export function initEditArea(editorContext) {
                 preparedSaveData = {
                     type: 'full',
                     data: newMarkdown, 
+                    // baseVersion: null, // Project full saves historically don't send hash
                     targetMarkdown: newMarkdown
                 };
             }
@@ -522,7 +549,10 @@ export function initEditArea(editorContext) {
             const titlesWereRefreshed = await _processAndRefreshPageLinkTitlesInEditor(liveEditor, editorContext);
 
             if (titlesWereRefreshed) {
-                editorContext.currentPageState.originalMarkdown = htmlToMarkdown(liveEditor.innerHTML);
+                 // Ensure currentPageState exists
+                if (editorContext.currentPageState) {
+                    editorContext.currentPageState.originalMarkdown = htmlToMarkdown(liveEditor.innerHTML);
+                }
             }
 
             if (liveEditor.innerHTML.trim() === '') liveEditor.classList.add('is-empty');
@@ -572,7 +602,7 @@ export function initEditArea(editorContext) {
             }
         }
 
-        if (trackChanges) {
+        if (trackChanges && editorContext.currentPageState) { // Ensure currentPageState exists
             const currentEditorMarkdown = htmlToMarkdown(liveEditor.innerHTML);
             if (editorContext.currentPageState.originalMarkdown !== undefined && currentEditorMarkdown !== editorContext.currentPageState.originalMarkdown) {
                 if (!editorContext.hasUnsavedChanges) {

@@ -1,5 +1,8 @@
 // --- START OF FILE routeUtils.js ---
 const crypto = require('crypto');
+const DiffMatchPatch = require('diff-match-patch'); // 1. Import DiffMatchPatch
+
+const dmp = new DiffMatchPatch(); // 2. Create an instance
 
 function calculateHash(text) {
     if (text === null || typeof text === 'undefined') return null;
@@ -23,13 +26,15 @@ function buildTree(pages, parentId = null) {
     return tree;
 }
 
-// duplicatePageRecursiveDb can also be moved here if it's generic enough
-// For now, it's in server.js, but ensure it's exported and imported if used elsewhere
-// Or, pass dbClient as an argument if moved here.
+// duplicatePageRecursiveDb is currently in server.js and announcementAdminRoutes.js.
+// If you decide to centralize it here, you'd need to pass the dbClient.
+// For example:
+// async function duplicatePageRecursiveDb(originalPageId, newProjectId, newParentId, displayOrder, dbClient, duplicatedIdMap = {}) { ... }
 
 module.exports = {
     calculateHash,
     buildTree,
+    dmp, // 3. Export the dmp instance
     // duplicatePageRecursiveDb, // if you move it
 };
 // --- END OF FILE routeUtils.js ---

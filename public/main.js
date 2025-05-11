@@ -213,6 +213,11 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         turndownServiceInstance.keep(['table', 'thead', 'tbody', 'tr', 'th', 'td', 'caption']);
 
+        // Keep Font Awesome <i> tags with 'fas' class
+        turndownServiceInstance.keep(function (node) {
+            return node.nodeName === 'i' && node.classList && node.classList.contains('fas');
+        });
+
         appContext.htmlToMarkdown = (htmlString) => {
             if (!turndownServiceInstance) { return htmlString; }
             try {

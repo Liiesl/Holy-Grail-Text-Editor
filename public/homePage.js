@@ -11,28 +11,18 @@ export function initHomepage(appContext) {
         homepageContainer.id = 'homepage-content';
         
         let projects = []; // Initialize with an empty array
-        if (appContext.currentUser) {
-            // Attempt 1: Scrape projects from the existing sidebar DOM.
-            if (appContext.pageTreeContainer) {
-                const projectItems = appContext.pageTreeContainer.querySelectorAll('.project-item[data-project-name]');
-                projectItems.forEach(item => {
-                    if (item.dataset.projectName) {
-                        projects.push(item.dataset.projectName);
-                    }
-                });
-                if (projects.length > 0) {
-                    console.log("Homepage: Found projects by scraping existing sidebar DOM.", projects);
-                }
-            }
 
-            // Attempt 2: If no projects found from the initial scrape, AND fetchProjects function exists,
-            if (projects.length === 0 && appContext.fetchProjects) {
-                console.log("Homepage: No projects from initial DOM scrape. Calling appContext.fetchProjects().");
+        if (appContext.currentUser) {
+            if (appContext.fetchProjects) {
+                console.log("Homepage: Attempting to refresh project list by calling appContext.fetchProjects().");
                 try {
+                    // Always call fetchProjects to ensure the sidebar DOM is up-to-date before scraping.
+                    // This will update appContext.projectsContentArea (which is the element with id="pageTreeContainer").
                     await appContext.fetchProjects(); 
                     
-                    if (appContext.pageTreeContainer) {
-                        const projectItems = appContext.pageTreeContainer.querySelectorAll('.project-item[data-project-name]');
+                    // Now, scrape the (presumably) updated projectsContentArea.
+                    if (appContext.projectsContentArea) { // Corrected from pageTreeContainer to projectsContentArea
+                        const projectItems = appContext.projectsContentArea.querySelectorAll('.project-item[data-project-name]');
                         projectItems.forEach(item => {
                             if (item.dataset.projectName) {
                                 projects.push(item.dataset.projectName);
@@ -40,22 +30,24 @@ export function initHomepage(appContext) {
                         });
 
                         if (projects.length > 0) {
-                            console.log("Homepage: Found projects by scraping sidebar DOM after calling fetchProjects().", projects);
+                            console.log("Homepage: Found projects by scraping sidebar DOM after explicit fetchProjects() call.", projects);
                         } else {
-                            console.warn("Homepage: Still no projects found after explicitly calling fetchProjects() and scraping. User might have no projects.");
+                            console.warn("Homepage: No projects found after explicit fetchProjects() call and scraping. User might have no projects, or fetchProjects failed to update DOM correctly.");
                         }
+                    } else {
+                        console.warn("Homepage: appContext.projectsContentArea not available for scraping after attempting fetchProjects().");
                     }
                 } catch (error) {
                     console.error("Error calling appContext.fetchProjects() for homepage:", error);
                     appContext.showStatus('Failed to load project data for homepage.', 'error', 3000);
-                    projects = []; 
+                    // projects array remains empty in case of error
                 }
-            } else if (projects.length === 0 && !appContext.fetchProjects) {
-                console.warn("Homepage: No projects from initial DOM scrape, and appContext.fetchProjects is not available to attempt a refresh.");
-                projects = []; 
+            } else {
+                console.warn("Homepage: appContext.fetchProjects is not available. Cannot load project list.");
+                // projects array remains empty
             }
             
-        } else if (!appContext.currentUser) {
+        } else { // No appContext.currentUser
              homepageContainer.innerHTML = `<h2>Welcome!</h2><p class="no-projects">Please log in to see your projects.</p>`;
              appContext.liveEditor.appendChild(homepageContainer);
              if(appContext.currentPageDisplay) appContext.currentPageDisplay.textContent = 'Homepage';
@@ -67,7 +59,6 @@ export function initHomepage(appContext) {
             contentHtml += '<ul class="project-list">';
             projects.forEach(projectName => {
                 const escapedProjectName = CSS.escape(projectName);
-                // Updated HTML structure for each project item
                 contentHtml += `
                     <li class="project-list-item">
                         <a href="#" class="project-link" data-project-name="${escapedProjectName}">
@@ -94,15 +85,14 @@ export function initHomepage(appContext) {
         homepageContainer.querySelectorAll('.project-link').forEach(link => {
             link.addEventListener('click', async (e) => {
                 e.preventDefault();
-                // Traverse up to the link if a child element was clicked (icon or text)
                 const projectLinkElement = e.target.closest('.project-link');
                 if (!projectLinkElement) return;
 
                 const projectName = projectLinkElement.dataset.projectName;
 
                 if (appContext.currentProject === projectName && appContext.currentPageState) {
-                    // Check if the current page is the root page of this project
-                    const projectItem = document.querySelector(`#page-tree .project-item[data-project-name="${CSS.escape(projectName)}"]`);
+                    // Use projectsContentArea here as well for consistency and correctness
+                    const projectItem = appContext.projectsContentArea?.querySelector(`.project-item[data-project-name="${CSS.escape(projectName)}"]`);
                     const rootPageId = projectItem ? projectItem.dataset.rootPageId : null;
                     if (rootPageId && appContext.currentPageState.id === rootPageId) {
                         appContext.showStatus(`Project ${projectName} is already active and its main page is displayed.`, 'info', 2000);
@@ -113,14 +103,14 @@ export function initHomepage(appContext) {
                 appContext.showStatus(`Loading project ${projectName}...`, 'info', 0);
                 
                 if (appContext.selectProject) {
-                    // Find the corresponding project LI element in the sidebar
-                    const projectItemInSidebar = document.querySelector(`#page-tree .project-item[data-project-name="${CSS.escape(projectName)}"]`);
+                    // Use projectsContentArea here as well for consistency and correctness
+                    const projectItemInSidebar = appContext.projectsContentArea?.querySelector(`.project-item[data-project-name="${CSS.escape(projectName)}"]`);
                     
                     if (!projectItemInSidebar) {
                         console.error(`Homepage: Could not find project item for "${projectName}" in sidebar to select.`);
                         appContext.showStatus(`Could not switch to project "${projectName}". Sidebar item not found.`, 'error');
                         if (appContext.displayHomepage && !appContext.currentProject && !appContext.currentPageState) {
-                             appContext.displayHomepage();
+                             await appContext.displayHomepage();
                         }
                         return;
                     }
@@ -130,7 +120,7 @@ export function initHomepage(appContext) {
                         console.error(`Error selecting project ${projectName} from homepage:`, error);
                         appContext.showStatus(`Error loading project ${projectName}. ${error.message}`, 'error');
                         if (appContext.displayHomepage && !appContext.currentProject && !appContext.currentPageState) {
-                             appContext.displayHomepage();
+                           await appContext.displayHomepage(); 
                         }
                     }
                 } else {

@@ -14,7 +14,7 @@ const adminRoutes = require('./adminRoutes'); // Import admin routes
 const announcementAdminRoutes = require('./announcementAdminRoutes'); // New admin routes for announcements
 const announcementPublicRoutes = require('./announcementPublicRoutes'); // New public routes for announcements
 
-const dmp = new DiffMatchPatch();
+const {calculateHash, buildTree, dmp} = require('./routeUtils'); // Import dmp from routeUtils
 const app = express();
 const port = process.env.PORT || 3133;
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -31,29 +31,6 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/admin/announcements', announcementAdminRoutes);
 // Register public routes for viewing announcements
 app.use('/api/announcements', announcementPublicRoutes);
-
-
-function calculateHash(text) {
-    if (text === null || typeof text === 'undefined') return null;
-    return crypto.createHash('sha256').update(text, 'utf8').digest('hex');
-}
-
-function buildTree(pages, parentId = null) {
-    const tree = [];
-    pages
-        .filter(page => page.parent_id === parentId)
-        .sort((a, b) => a.display_order - b.display_order)
-        .forEach(page => {
-            const children = buildTree(pages, page.id);
-            tree.push({
-                id: page.id,
-                title: page.title,
-                type: 'page',
-                children: children,
-            });
-        });
-    return tree;
-}
 
 async function duplicatePageRecursiveDb(originalPageId, newProjectId, newParentIdForDuplicatedPage, displayOrder, dbClient, duplicatedIdMap = {}) {
     const pageRes = await dbClient.query('SELECT * FROM pages WHERE id = $1', [originalPageId]);

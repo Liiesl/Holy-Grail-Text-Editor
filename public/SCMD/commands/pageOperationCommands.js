@@ -9,7 +9,6 @@ export const createSubpageCommand = {
     description: 'Create a new subpage and link it',
     category: 'Pages',
     canExecute: (appContext) => {
-        // --- START MODIFICATION ---
         const isProjectContext = !!(appContext.currentProject && appContext.currentPageState);
         const isUserAdmin = appContext.currentUser && (appContext.currentUser.role === 'admin' || appContext.currentUser.role === 'owner');
         const isAnnouncementContext = isUserAdmin &&
@@ -17,10 +16,8 @@ export const createSubpageCommand = {
                                       appContext.currentPageState &&
                                       appContext.currentPageState.type === 'announcement';
         return isProjectContext || isAnnouncementContext;
-        // --- END MODIFICATION ---
     },
     execute: async (appContext, { selection, range }) => {
-        // --- START MODIFICATION ---
         const {
             liveEditor,
             showStatus,
@@ -47,7 +44,6 @@ export const createSubpageCommand = {
             showStatus('Cannot create subpage: Project context is invalid.', 'error');
             return true;
         }
-        // --- END MODIFICATION ---
 
         const subpageTitle = prompt('Enter title for the new subpage:');
         if (!subpageTitle || !subpageTitle.trim()) {
@@ -55,7 +51,6 @@ export const createSubpageCommand = {
         }
 
         try {
-            // --- START MODIFICATION ---
             let apiUrl;
             let payload;
             let contextId; // project name or announcement ID
@@ -75,7 +70,6 @@ export const createSubpageCommand = {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
-            // --- END MODIFICATION ---
 
             if (!response.ok) {
                 const errData = await response.json().catch(() => ({ error: 'Unknown server error' }));
@@ -95,7 +89,6 @@ export const createSubpageCommand = {
 
             showStatus(`Subpage "${result.title}" created and linked.`, 'success');
 
-            // --- START MODIFICATION ---
             if (isAnnouncementMode) {
                 if (fetchAnnouncementPageTree && appContext.announcementsContentArea) {
                     // Need to find the container for the specific announcement's tree
@@ -120,7 +113,6 @@ export const createSubpageCommand = {
                     await fetchPageTree(contextId, result.newPageId); // Load new page after tree refresh
                 }
             }
-            // --- END MODIFICATION ---
             return true; // Command succeeded, allow default cleanup.
         } catch (error) {
             console.error('Error creating subpage via slash command:', error);
@@ -138,59 +130,47 @@ export const embedPageCommand = {
     text: 'Embed Page',
     description: 'Link an existing page',
     category: 'Pages',
-    canExecute: (appContext) => { // Added canExecute for consistency, though it's always true if command is available
-        return !!(appContext.openEmbedPageModal && appContext.currentProject); // Primarily for project context
+    // --- START MODIFICATION ---
+    canExecute: (appContext) => {
+        if (!appContext.openEmbedPageModal) return false; // Modal function must exist
+
+        const isUserAdmin = appContext.currentUser && (appContext.currentUser.role === 'admin' || appContext.currentUser.role === 'owner');
+        const projectContextValid = !!appContext.currentProject;
+        const announcementContextValid = !!(
+            appContext.currentAnnouncementContext &&
+            appContext.currentPageState && // Ensure we have a page state
+            appContext.currentPageState.type === 'announcement' && // Specifically for announcement page
+            isUserAdmin // And user is admin
+        );
+        return projectContextValid || announcementContextValid;
     },
     execute: (appContext, { slashCmdFinalRect, selection, range, currentSearchQuery, originalSlashCommandInfo }) => {
-        const { liveEditor, openEmbedPageModal, closeEmbedPageModal, showStatus, removeSlashCommandTextFromEditor, closeSlashCommandModal } = appContext;
+        const {
+            liveEditor,
+            openEmbedPageModal, // Guaranteed to exist if canExecute passed
+            closeEmbedPageModal,
+            showStatus,
+            removeSlashCommandTextFromEditor,
+            closeSlashCommandModal,
+            currentProject,
+            currentPageState,
+            currentAnnouncementContext,
+            currentUser
+        } = appContext;
 
-        // Ensure we are in a project context for embedding general project pages
-        if (!appContext.currentProject) {
-            if (showStatus) showStatus('Embed Page command is for project pages.', 'info');
-             if (removeSlashCommandTextFromEditor && originalSlashCommandInfo) {
-                removeSlashCommandTextFromEditor(originalSlashCommandInfo, currentSearchQuery);
-            }
-            if (closeSlashCommandModal) {
-                closeSlashCommandModal();
-                appContext.slashCommandInfo = null;
-            }
-            return true;
-        }
+        // Determine context validity (even though canExecute should handle it, this is a safeguard)
+        const isUserAdmin = currentUser && (currentUser.role === 'admin' || currentUser.role === 'owner');
+        const isValidProjectContext = !!currentProject; // Simplified: if currentProject exists, assume project context for embedding
+        const isValidAnnouncementContext = !!(
+            currentAnnouncementContext &&
+            currentPageState &&
+            currentPageState.type === 'announcement' &&
+            isUserAdmin
+        );
 
-
-        if (openEmbedPageModal) {
-            openEmbedPageModal(
-                (selectedPage) => { 
-                    if (closeEmbedPageModal) closeEmbedPageModal();
-
-                    if (selectedPage && selectedPage.pageId && selectedPage.pageTitle) {
-                        if (removeSlashCommandTextFromEditor && originalSlashCommandInfo) {
-                            removeSlashCommandTextFromEditor(originalSlashCommandInfo, currentSearchQuery);
-                        }
-
-                        liveEditor.focus(); 
-                        const sel = window.getSelection();
-                        if (sel && range) { 
-                            sel.removeAllRanges();
-                            sel.addRange(range.cloneRange()); 
-                        }
-
-                        const linkHTML = `<a href="page://${selectedPage.pageId}">${selectedPage.pageTitle}</a> `;
-                        document.execCommand('insertHTML', false, linkHTML);
-                        liveEditor.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
-                    }
-                    
-                    if (closeSlashCommandModal) {
-                         closeSlashCommandModal();
-                         appContext.slashCommandInfo = null; 
-                    }
-                },
-                slashCmdFinalRect,      
-                currentSearchQuery      
-            );
-            return false; 
-        } else {
-            showStatus('Embed page functionality is not available.', 'error');
+        if (!isValidProjectContext && !isValidAnnouncementContext) {
+            // This state should ideally be prevented by canExecute.
+            if (showStatus) showStatus('Embed Page: No valid context (project or admin in announcement).', 'info');
             if (removeSlashCommandTextFromEditor && originalSlashCommandInfo) {
                 removeSlashCommandTextFromEditor(originalSlashCommandInfo, currentSearchQuery);
             }
@@ -198,21 +178,59 @@ export const embedPageCommand = {
                 closeSlashCommandModal();
                 appContext.slashCommandInfo = null;
             }
-            return true; 
+            return true; // Command sequence finished, allow cleanup.
         }
+
+        // At this point, openEmbedPageModal is available and context is valid.
+        openEmbedPageModal(
+            (selectedPage) => {
+                if (closeEmbedPageModal) closeEmbedPageModal();
+
+                if (selectedPage && selectedPage.pageId && selectedPage.pageTitle) {
+                    if (removeSlashCommandTextFromEditor && originalSlashCommandInfo) {
+                        removeSlashCommandTextFromEditor(originalSlashCommandInfo, currentSearchQuery);
+                    }
+
+                    liveEditor.focus();
+                    const sel = window.getSelection();
+                    if (sel && range) {
+                        sel.removeAllRanges();
+                        sel.addRange(range.cloneRange());
+                    }
+
+                    const linkHTML = `<a href="page://${selectedPage.pageId}">${selectedPage.pageTitle}</a> `; // Use   (non-breaking space)
+                    document.execCommand('insertHTML', false, linkHTML);
+                    liveEditor.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+
+                    if (showStatus) showStatus(`Page "${selectedPage.pageTitle}" embedded.`, 'success');
+
+                } else {
+                    // User might have closed the modal without selecting.
+                    if (showStatus) showStatus('Embed Page: No page selected.', 'info');
+                }
+
+                if (closeSlashCommandModal) {
+                     closeSlashCommandModal();
+                     appContext.slashCommandInfo = null;
+                }
+            },
+            slashCmdFinalRect,
+            currentSearchQuery
+        );
+        return false; // Modal is open, command sequence not fully finished from slash command perspective.
+        // --- END MODIFICATION ---
     }
 };
 
-export const openInPagePeekCommand = { 
+export const openInPagePeekCommand = {
     command: 'open-in-peek',
     short: ['peek', 'op', 'openpeek', 'viewpeek'],
     icon: 'command-icon',
-    iconClass: 'fas fa-window-restore', 
+    iconClass: 'fas fa-window-restore',
     text: 'Open in Page Peek',
     description: 'Open the current page in a peek window',
     category: 'Pages',
     canExecute: (appContext) => {
-        // --- START MODIFICATION ---
         const isProjectContext = appContext.currentPageState &&
                                  appContext.currentPageState.id &&
                                  appContext.currentProject && // Ensure it's a project
@@ -224,21 +242,19 @@ export const openInPagePeekCommand = {
                                       appContext.currentAnnouncementContext && // Ensure it's an announcement
                                       appContext.currentPageState.type === 'announcement' &&
                                       appContext.openPageInPeekMode;
-        
+
         return isProjectContext || isAnnouncementContext;
-        // --- END MODIFICATION ---
     },
-    execute: (appContext, options) => { 
-        // --- START MODIFICATION ---
+    execute: (appContext, options) => {
         const { currentPageState, currentProject, currentAnnouncementContext, openPageInPeekMode, showStatus } = appContext;
 
         if (!currentPageState || !currentPageState.id) {
             if (showStatus) showStatus('Cannot open in peek: No current page loaded.', 'error');
-            return true; 
+            return true;
         }
         if (!openPageInPeekMode) {
             if (showStatus) showStatus('Cannot open in peek: Page peek functionality is not available.', 'error');
-            return true; 
+            return true;
         }
 
         let contextId;
@@ -254,9 +270,8 @@ export const openInPagePeekCommand = {
             if (showStatus) showStatus('Cannot open in peek: Page context is unclear.', 'error');
             return true;
         }
-        
+
         openPageInPeekMode(currentPageState.id, contextId, pageType);
-        // --- END MODIFICATION ---
         return true;
     }
 };

@@ -1,6 +1,6 @@
 // sidePanel.js
-import { initSideProjectFunctions } from './SDPNL/sideProject.js';
-import { initSideAnnouncementFunctions } from './SDPNL/sideAnnouncement.js';
+import { initSideProjectFunctions } from './sideProject.js';
+import { initSideAnnouncementFunctions } from './sideAnnouncement.js';
 
 export function initSidePanel(appContext) {
     const {

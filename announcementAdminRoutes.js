@@ -1,7 +1,8 @@
 const express = require('express');
 const db = require('./db');
 const { authenticateToken, authorizeRole } = require('./auth');
-const { buildTree, duplicatePageRecursiveDb } = require('./routeUtils'); // We'll create this file
+// Updated to include calculateHash and dmp from routeUtils
+const { buildTree, duplicatePageRecursiveDb, calculateHash, dmp } = require('./routeUtils'); 
 
 const router = express.Router();
 const ADMIN_ROLES = ['owner', 'admin'];
@@ -265,12 +266,12 @@ router.get('/:projectId/page/:pageId', authenticateToken, authorizeRole(ADMIN_RO
             return res.status(404).json({ error: 'Page not found in this announcement.' });
         }
         const pageInfo = pageRes.rows[0];
-        // const versionHash = calculateHash(pageInfo.markdown_content); // calculateHash needs to be imported/defined
+        const versionHash = calculateHash(pageInfo.markdown_content); // Use imported calculateHash
         res.json({
             id: pageInfo.id,
             title: pageInfo.title,
             markdown: pageInfo.markdown_content,
-            // versionHash: versionHash, 
+            versionHash: versionHash, 
         });
     } catch (error) {
         console.error(`Error reading page ${pageId} in announcement ${projectId}:`, error);
@@ -281,19 +282,21 @@ router.get('/:projectId/page/:pageId', authenticateToken, authorizeRole(ADMIN_RO
 });
 
 
-// Save page content for an announcement (PATCH/Diff can be added if needed, for now full save)
+// Save page content for an announcement
 router.post('/:projectId/page/:pageId', authenticateToken, authorizeRole(ADMIN_ROLES), async (req, res) => {
     const { projectId, pageId } = req.params;
-    const { markdown } = req.body; // Simplified: assuming full markdown. Add patch logic if needed.
+    const { markdown, patch_text, base_version_hash } = req.body;
+    const adminUserId = req.user.id;
+    let finalMarkdownContent;
     
-    if (typeof markdown !== 'string') {
-        return res.status(400).json({ error: 'Markdown content is required.' });
+    if (!(typeof markdown === 'string') && !(patch_text && typeof base_version_hash === 'string')) {
+        return res.status(400).json({ error: 'Markdown content or patch_text with base_version_hash is required.' });
     }
 
     const client = await db.getClient();
     try {
         await client.query('BEGIN');
-        const { project, error, status } = await getAnnouncementProjectForAdmin(client, projectId, req.user.id);
+        const { project, error, status } = await getAnnouncementProjectForAdmin(client, projectId, adminUserId);
         if (error) {
             await client.query('ROLLBACK');
             return res.status(status).json({ error });
@@ -305,28 +308,67 @@ router.post('/:projectId/page/:pageId', authenticateToken, authorizeRole(ADMIN_R
             return res.status(404).json({ error: 'Page not found in this announcement.' });
         }
         let currentPageData = pageCheckRes.rows[0];
+        const currentServerMarkdown = currentPageData.markdown_content;
+        const currentServerHash = calculateHash(currentServerMarkdown); // Use imported calculateHash
 
+        if (patch_text && typeof base_version_hash === 'string') {
+            if (currentServerHash !== base_version_hash) {
+                await client.query('ROLLBACK');
+                return res.status(409).json({
+                    error: 'Conflict: Page has been modified since last load. Please reload.',
+                    server_hash: currentServerHash,
+                    currentMarkdown: currentServerMarkdown // Optionally send back current content
+                });
+            }
+            const patches = dmp.patch_fromText(patch_text); // Use imported dmp instance
+            const [patchedMarkdown, results] = dmp.patch_apply(patches, currentServerMarkdown);
 
-        const h1Match = markdown.match(/^#\s+(.*?)(\r?\n|$)/m);
+            if (!results.every(applied => applied === true)) {
+                await client.query('ROLLBACK');
+                const failedPatchIndices = results.map((r, i) => !r ? i : -1).filter(i => i !== -1);
+                console.error(`Patch application failed for page ${pageId} in announcement ${projectId}. Failed patches at indices: ${failedPatchIndices.join(', ')}`);
+                return res.status(500).json({ error: 'Failed to apply patch to server content. Some patches did not apply cleanly.' });
+            }
+            finalMarkdownContent = patchedMarkdown;
+        } else if (typeof markdown === 'string') {
+            // For full markdown updates, also check base_version_hash if provided (for optimistic locking)
+            if (typeof base_version_hash === 'string' && currentServerHash !== base_version_hash) {
+               await client.query('ROLLBACK');
+                return res.status(409).json({
+                    error: 'Conflict: Page has been modified since last load (full update). Please reload.',
+                    server_hash: currentServerHash,
+                    currentMarkdown: currentServerMarkdown // Optionally send back current content
+                });
+            }
+            finalMarkdownContent = markdown;
+        } else {
+            // Fallback, should be caught by initial validation
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: 'Invalid save request. Provide full markdown or patch details.' });
+        }
+        
+        const h1Match = finalMarkdownContent.match(/^#\s+(.*?)(\r?\n|$)/m);
         let newTitleFromContent = currentPageData.title;
         if (h1Match && h1Match[1]) newTitleFromContent = h1Match[1].trim();
-        else if (markdown.trim() === "") newTitleFromContent = "Untitled";
+        else if (finalMarkdownContent.trim() === "") newTitleFromContent = "Untitled";
         
         await client.query(
             'UPDATE pages SET markdown_content = $1, title = $2, updated_at = NOW() WHERE id = $3',
-            [markdown, newTitleFromContent, pageId]
+            [finalMarkdownContent, newTitleFromContent, pageId]
         );
         await client.query('COMMIT');
-        // const newVersionHash = calculateHash(markdown);
+        
+        const newVersionHash = calculateHash(finalMarkdownContent);
         res.json({
             message: 'Page saved successfully for announcement.',
             id: pageId,
             newTitle: newTitleFromContent,
-            // newVersionHash: newVersionHash
+            newMarkdown: finalMarkdownContent,
+            newVersionHash: newVersionHash
         });
     } catch (error) {
         await client.query('ROLLBACK');
-        console.error(`Error saving page ${pageId} in announcement ${projectId}:`, error);
+        console.error(`Error saving page ${pageId} in announcement ${projectId} by admin ${adminUserId}:`, error);
         res.status(500).json({ error: `Failed to save page: ${error.message}` });
     } finally {
         client.release();
@@ -400,7 +442,6 @@ router.post('/:projectId/pages', authenticateToken, authorizeRole(ADMIN_ROLES), 
     }
 });
 
-// --- START OF MODIFICATION ---
 // Delete a page within an announcement
 router.delete('/:projectId/page/:pageId', authenticateToken, authorizeRole(ADMIN_ROLES), async (req, res) => {
     const { projectId, pageId } = req.params;
@@ -444,7 +485,6 @@ router.delete('/:projectId/page/:pageId', authenticateToken, authorizeRole(ADMIN
         client.release();
     }
 });
-// --- END OF MODIFICATION ---
 
 // Other page management routes (rename, duplicate) would follow a similar pattern:
 // 1. Authenticate, authorize admin.
