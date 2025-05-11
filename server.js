@@ -9,8 +9,8 @@ const db = require('./db');
 require('dotenv').config(); // Configures .env for the whole application
 
 // Auth related functionalities are now imported from auth.js
-const { authRouter, authenticateToken } = require('./auth'); 
-// initializeDefaultProject is used within auth.js, so no need to import here directly if not used elsewhere in server.js
+const { authRouter, authenticateToken, authorizeRole } = require('./auth'); // authorizeRole might be used directly in server.js for other routes if needed.
+const adminRoutes = require('./adminRoutes'); // Import admin routes
 
 const dmp = new DiffMatchPatch();
 const app = express();
@@ -23,6 +23,9 @@ app.use(express.static(PUBLIC_DIR));
 
 // Register auth routes from auth.js
 app.use('/api/auth', authRouter);
+// Register admin routes
+app.use('/api/admin', adminRoutes);
+
 
 function calculateHash(text) {
     if (text === null || typeof text === 'undefined') return null;
@@ -86,11 +89,7 @@ async function duplicatePageRecursiveDb(originalPageId, newProjectId, newParentI
     return newPageId;
 }
 
-// --- Auth API Endpoints ---
-// MOVED to auth.js
-
 // --- Project API Endpoints (Protected) ---
-// authenticateToken is now imported from ./auth
 app.post('/api/projects', authenticateToken, async (req, res) => {
     const { projectName } = req.body;
     const userId = req.user.id;
@@ -268,7 +267,7 @@ app.post('/api/project/:projectName/page/:pageId', authenticateToken, async (req
         else if (finalMarkdownContent.trim() === "") newTitleFromContent = "Untitled";
         
         await client.query(
-            'UPDATE pages SET markdown_content = $1, title = $2 WHERE id = $3',
+            'UPDATE pages SET markdown_content = $1, title = $2, updated_at = NOW() WHERE id = $3', // Added updated_at
             [finalMarkdownContent, newTitleFromContent, pageId]
         );
         await client.query('COMMIT');
@@ -347,7 +346,7 @@ app.post('/api/project/:projectName/pages', authenticateToken, async (req, res) 
         const rootPageCheck = await client.query('SELECT id FROM pages WHERE project_id = $1 AND parent_id IS NULL AND id = $2', [projectId, actualParentId]);
         const isParentTheRoot = rootPageCheck.rows.length > 0;
 
-        if (actualParentId && !isParentTheRoot) {
+        if (actualParentId && !isParentTheRoot) { // Don't auto-add links to the actual root page of the project
             const parentPageInfoRes = await client.query(
                 'SELECT markdown_content FROM pages WHERE id = $1 FOR UPDATE', [actualParentId]
             );
@@ -358,7 +357,7 @@ app.post('/api/project/:projectName/pages', authenticateToken, async (req, res) 
                 }
                 parentContent += `[${trimmedTitle}](page://${newPageId})\n`;
                 await client.query(
-                    'UPDATE pages SET markdown_content = $1 WHERE id = $2', [parentContent, actualParentId]
+                    'UPDATE pages SET markdown_content = $1, updated_at = NOW() WHERE id = $2', [parentContent, actualParentId] // Added updated_at
                 );
                 linkAddedToParentMarkdown = true;
             }
@@ -374,6 +373,35 @@ app.post('/api/project/:projectName/pages', authenticateToken, async (req, res) 
         res.status(500).json({ error: `Failed to create page: ${error.message}` });
     } finally {
         client.release();
+    }
+});
+
+app.get('/api/project/:projectName/page-info/:pageId', authenticateToken, async (req, res) => {
+    const { projectName, pageId } = req.params;
+    const userId = req.user.id;
+
+    try {
+        const pageInfoRes = await db.query(
+            `SELECT p.id, p.title
+             FROM pages p
+             JOIN projects pr ON p.project_id = pr.id
+             WHERE p.id = $1 AND pr.name = $2 AND pr.user_id = $3`,
+            [pageId, projectName, userId]
+        );
+
+        if (pageInfoRes.rows.length === 0) {
+            return res.status(404).json({ error: 'Page not found or access denied.' });
+        }
+
+        const pageData = pageInfoRes.rows[0];
+        res.json({
+            id: pageData.id,
+            title: pageData.title
+        });
+
+    } catch (error) {
+        console.error(`Error fetching page info for page ${pageId} in project ${projectName}, user ${userId}:`, error);
+        res.status(500).json({ error: `Failed to fetch page info: ${error.message}` });
     }
 });
 
@@ -425,7 +453,7 @@ app.put('/api/project/:projectName/rename', authenticateToken, async (req, res) 
         }
 
         await client.query(
-            'UPDATE projects SET name = $1 WHERE id = $2 AND user_id = $3',
+            'UPDATE projects SET name = $1, updated_at = NOW() WHERE id = $2 AND user_id = $3', // Added updated_at
             [trimmedNewName, projectId, userId]
         );
         
@@ -440,11 +468,11 @@ app.put('/api/project/:projectName/rename', authenticateToken, async (req, res) 
             const rootPage = rootPageRes.rows[0];
             const newRootTitle = `Welcome to ${trimmedNewName}`;
             let rootContent = rootPage.markdown_content;
-            const safeOldProjectName = oldProjectName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const safeOldProjectName = oldProjectName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); // Escape for regex
             rootContent = rootContent.replace(new RegExp(`^# Welcome to ${safeOldProjectName}`, 'm'), `# Welcome to ${trimmedNewName}`);
             
             await client.query(
-                'UPDATE pages SET title = $1, markdown_content = $2 WHERE id = $3',
+                'UPDATE pages SET title = $1, markdown_content = $2, updated_at = NOW() WHERE id = $3', // Added updated_at
                 [newRootTitle, rootContent, rootPage.id]
             );
         }
@@ -472,7 +500,7 @@ app.post('/api/project/:projectName/duplicate', authenticateToken, async (req, r
      if (trimmedNewName.includes('/') || trimmedNewName.includes('\\') || trimmedNewName.startsWith('.')) {
         return res.status(400).json({ error: 'Invalid characters in new project name.' });
     }
-    if (originalProjectName === trimmedNewName) {
+    if (originalProjectName === trimmedNewName && newProjectName) { // only error if newProjectName was explicitly provided and is same
         return res.status(400).json({ error: 'New project name cannot be the same as the original if specified.'})
     }
 
@@ -502,7 +530,7 @@ app.post('/api/project/:projectName/duplicate', authenticateToken, async (req, r
             'SELECT id FROM pages WHERE project_id = $1 AND parent_id IS NULL', [originalProjectId]
         );
         if (originalRootPageRes.rows.length === 0) {
-            await client.query('COMMIT'); // Commit project creation even if root page missing
+            await client.query('COMMIT'); 
             return res.status(201).json({ message: `Project duplicated as "${trimmedNewName}", but original had no root page.`, newProjectName: trimmedNewName });
         }
         const originalRootPageId = originalRootPageRes.rows[0].id;
@@ -516,23 +544,24 @@ app.post('/api/project/:projectName/duplicate', authenticateToken, async (req, r
 
         if (newRootPageToUpdateRes.rows.length > 0) {
             const newRootPage = newRootPageToUpdateRes.rows[0];
-            const expectedCopiedTitle = `Welcome to ${originalProjectName} (Copy)`; 
-            // This title adjustment logic assumes the root page of the original project was "Welcome to <OriginalProjectName>"
-            // and duplicatePageRecursiveDb appends " (Copy)" to titles.
-            // If the duplicated root page title is "Welcome to OriginalProjectName (Copy) (Copy)", this logic needs adjustment.
-            // The current duplicatePageRecursiveDb makes titles like "OriginalTitle (Copy)".
-            // If original root page title was "Welcome to OriginalProject", duplicated is "Welcome to OriginalProject (Copy)"
-            if (newRootPage.title.startsWith(`Welcome to ${originalProjectName}`) && newRootPage.title.endsWith('(Copy)')) {
+            // Default title from duplicatePageRecursiveDb would be "Original Title (Copy)"
+            // If original title was "Welcome to OriginalProjectName", duplicated is "Welcome to OriginalProjectName (Copy)"
+            // We want the new root page to be "Welcome to NewDuplicatedProjectName"
+            if (newRootPage.title === `Welcome to ${originalProjectName} (Copy)`) {
                 const finalNewRootPageTitle = `Welcome to ${trimmedNewName}`;
                 let rootContent = newRootPage.markdown_content;
-                // Regex to replace "# Welcome to OriginalProjectName (Copy)" with "# Welcome to NewDuplicatedProjectName"
                 const titleInMarkdownRegex = new RegExp(`^# ${newRootPage.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'm');
                 rootContent = rootContent.replace(titleInMarkdownRegex, `# ${finalNewRootPageTitle}`);
                 
                 await client.query(
-                    'UPDATE pages SET title = $1, markdown_content = $2 WHERE id = $3',
+                    'UPDATE pages SET title = $1, markdown_content = $2, updated_at = NOW() WHERE id = $3', // Added updated_at
                     [finalNewRootPageTitle, rootContent, newRootPage.id]
                 );
+            } else if (newRootPage.title.endsWith(" (Copy)")) { // More generic (Copy) suffix handling
+                const baseTitle = newRootPage.title.substring(0, newRootPage.title.length - " (Copy)".length);
+                // This part is heuristic. If the original root wasn't "Welcome to...", then it may not make sense to change it to "Welcome to <new name>"
+                // For now, we'll only adjust if it matched the "Welcome to Original (Copy)" pattern.
+                // Otherwise, "Some Other Title (Copy)" remains.
             }
         }
 
@@ -581,7 +610,7 @@ app.delete('/api/project/:projectName/page/:pageId', authenticateToken, async (r
              return res.status(404).json({ error: 'Page not found or already deleted.' });
         }
         await client.query('COMMIT');
-        res.json({ message: 'Page and its subpages deleted successfully.' }); // Note: subpages are deleted due to ON DELETE CASCADE in DB schema
+        res.json({ message: 'Page and its subpages deleted successfully.' });
     } catch (error) {
         await client.query('ROLLBACK');
         console.error(`Error deleting page ${pageId} in ${projectName}, user ${userId}:`, error);
@@ -618,7 +647,7 @@ app.put('/api/project/:projectName/page/:pageId/rename', authenticateToken, asyn
         
         let content = pageInfo.markdown_content || "";
         const h1Regex = /^#\s+(.*?)(\r?\n|$)/m;
-        const safeTrimmedNewTitle = trimmedNewTitle.replace(/\$/g, '$$$$'); // Escape $ for string replacement
+        const safeTrimmedNewTitle = trimmedNewTitle.replace(/\$/g, '$$$$'); 
 
         if (h1Regex.test(content)) {
             content = content.replace(h1Regex, `# ${safeTrimmedNewTitle}$2`);
@@ -627,7 +656,7 @@ app.put('/api/project/:projectName/page/:pageId/rename', authenticateToken, asyn
         }
 
         await client.query(
-            'UPDATE pages SET title = $1, markdown_content = $2 WHERE id = $3',
+            'UPDATE pages SET title = $1, markdown_content = $2, updated_at = NOW() WHERE id = $3', // Added updated_at
             [trimmedNewTitle, content, pageId]
         );
         await client.query('COMMIT');
@@ -667,7 +696,6 @@ app.post('/api/project/:projectName/page/:pageId/duplicate', authenticateToken, 
             return res.status(400).json({ error: 'Cannot duplicate the root page. Duplicate the project instead.' });
         }
         
-        // Make space for the new duplicated page(s)
         await client.query(
             `UPDATE pages SET display_order = display_order + 1 
              WHERE project_id = $1 AND parent_id = $2 AND display_order > $3`,
@@ -690,7 +718,7 @@ app.post('/api/project/:projectName/page/:pageId/duplicate', authenticateToken, 
         res.status(201).json({
             message: 'Page duplicated successfully.',
             newRootPageId: newTopLevelPageId, 
-            newTitle: newTitle // Title will be "Original Title (Copy)"
+            newTitle: newTitle 
         });
 
     } catch (error) {
@@ -703,18 +731,25 @@ app.post('/api/project/:projectName/page/:pageId/duplicate', authenticateToken, 
 });
 
 // Catch-all for SPA
-app.get(('/'), (req, res, next) => {
+app.get(('/'), (req, res, next) => { 
     if (req.path.startsWith('/api/')) {
         return res.status(404).json({ error: `API endpoint ${req.path} not found.` });
     }
-    if (/\.(css|js|map|ico|png|jpg|jpeg|gif|svg|woff|woff2|ttf|eot)$/i.test(req.path)) {
+    // Check if it looks like a static file request (common extensions)
+    if (/\.(css|js|map|ico|png|jpg|jpeg|gif|svg|woff|woff2|ttf|eot|json|txt)$/i.test(req.path)) { 
         // Let express.static handle it if it's a static file request
-        return next(); 
+        // If express.static doesn't find it, it will call next() which might lead to 404 or this handler again
+        // So, it's important that static files are correctly served by express.static.
+        // If we reach here for a static file path, it means it wasn't found by express.static.
+        // For simplicity, we'll assume express.static handles found files, and this is for SPA routing.
+        return next();
     }
     res.sendFile(path.join(PUBLIC_DIR, 'index.html'), (err) => {
         if (err) {
             console.error("Error sending index.html:", err);
-            res.status(500).send("Error serving application.");
+            if (!res.headersSent) { // Avoid "Error [ERR_HTTP_HEADERS_SENT]: Cannot set headers after they are sent to the client"
+                 res.status(500).send("Error serving application.");
+            }
         }
     });
 });
@@ -722,11 +757,9 @@ app.get(('/'), (req, res, next) => {
 async function startServer() {
     try {
         await db.initializeSchema(); 
-        // The default project is now initialized per user upon registration (in auth.js),
-        // so no global initialization is needed here.
         
         app.listen(port, '0.0.0.0', () => {
-            console.log(`Server listening at http://localhost:${port}`);
+            console.log(`Server listening at http://0.0.0.0:${port}`); // Listen on all interfaces
             console.log(`Public directory: ${PUBLIC_DIR}`);
             if (!fssync.existsSync(PUBLIC_DIR) || !fssync.existsSync(path.join(PUBLIC_DIR, 'index.html'))) {
                 console.warn("Warning: Public directory or index.html not found. SPA might not serve correctly.");

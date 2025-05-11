@@ -27,6 +27,17 @@ async function initializeSchema() {
 
     await client.query('CREATE EXTENSION IF NOT EXISTS "uuid-ossp";');
 
+    // --- Create user_role ENUM type ---
+    await client.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'user_role') THEN
+          CREATE TYPE user_role AS ENUM ('user', 'admin', 'owner');
+        END IF;
+      END $$;
+    `);
+    console.log('Ensured "user_role" ENUM type exists.');
+
     const updateTimestampFunction = `
       CREATE OR REPLACE FUNCTION trigger_set_timestamp()
       RETURNS TRIGGER AS $$
@@ -45,10 +56,29 @@ async function initializeSchema() {
         username VARCHAR(50) NOT NULL UNIQUE,
         email VARCHAR(255) NOT NULL UNIQUE,
         password_hash VARCHAR(255) NOT NULL,
+        role user_role NOT NULL DEFAULT 'user',
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
       );
     `);
+    // Ensure 'role' column exists and has the correct type and default if table already existed
+    const roleColumnCheck = await client.query(`
+      SELECT column_name FROM information_schema.columns 
+      WHERE table_name='users' AND column_name='role';
+    `);
+    if (roleColumnCheck.rows.length === 0) {
+      await client.query("ALTER TABLE users ADD COLUMN role user_role NOT NULL DEFAULT 'user';");
+    } else {
+      // If column exists, ensure it's of user_role type and has default (this is more complex to make idempotent)
+      // For simplicity, we assume if it exists, it was created correctly or will be manually fixed if not.
+      // A more robust migration would check current type and default and alter if necessary.
+      await client.query("ALTER TABLE users ALTER COLUMN role SET DEFAULT 'user';");
+      await client.query("ALTER TABLE users ALTER COLUMN role SET NOT NULL;");
+      // Changing type if it's wrong (e.g. was VARCHAR) is more involved and can fail with existing data.
+      // Example: ALTER TABLE users ALTER COLUMN role TYPE user_role USING role::text::user_role;
+    }
+    console.log('Ensured "users" table schema including "role" column.');
+
     await client.query('CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);');
     await client.query('CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);');
     await client.query(`
@@ -77,8 +107,6 @@ async function initializeSchema() {
     console.log('Ensured "user_id" column exists in "projects" table.');
 
     // 3. Attempt to set user_id to NOT NULL.
-    //    This will fail if existing projects have NULL user_id.
-    //    A full migration script would handle populating user_id for existing rows first.
     const userIdColInfo = await client.query(`SELECT attnotnull FROM pg_attribute WHERE attrelid = 'projects'::regclass AND attname = 'user_id';`);
     if (userIdColInfo.rows.length > 0 && !userIdColInfo.rows[0].attnotnull) {
         try {
@@ -88,7 +116,6 @@ async function initializeSchema() {
             if (e.message.includes("cannot alter column") && e.message.includes("contains null values")) {
                 console.warn("Warning: Could not set projects.user_id to NOT NULL because existing rows have NULL. Manual data migration required for projects.user_id to assign them to users.");
             } else {
-                // Re-throw if it's not the expected null violation error
                 throw e;
             }
         }
@@ -96,14 +123,10 @@ async function initializeSchema() {
         console.log('projects.user_id is already NOT NULL.');
     }
 
-
     // 4. Attempt to add Foreign Key constraint from projects.user_id to users.id.
     const fkProjectUserExists = await client.query(`SELECT conname FROM pg_constraint WHERE conrelid = 'projects'::regclass AND conname = 'projects_user_id_fkey';`);
     if (fkProjectUserExists.rows.length === 0) {
         try {
-            // This requires user_id to be NOT NULL if the FK is to be effective for all rows,
-            // or for existing NULL user_id rows to be updated.
-            // If user_id is NOT NULL (attempted above), this should work if all user_ids are valid.
             await client.query('ALTER TABLE projects ADD CONSTRAINT projects_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;');
             console.log('Added FOREIGN KEY projects.user_id -> users.id.');
         } catch (e) {
@@ -114,18 +137,14 @@ async function initializeSchema() {
     }
 
     // 5. Drop old global unique constraint on project name if it existed.
-    //    (e.g., if previous schema had UNIQUE(name) instead of UNIQUE(user_id, name))
     await client.query('ALTER TABLE projects DROP CONSTRAINT IF EXISTS projects_name_key;');
     console.log('Attempted to drop old global unique constraint "projects_name_key" if it existed.');
 
     // 6. Add new unique constraint for (user_id, name).
-    const uniqueUserProjectNameConstraint = 'projects_user_id_name_key'; // Standard naming
+    const uniqueUserProjectNameConstraint = 'projects_user_id_name_key'; 
     const uniqueConstraintCheck = await client.query(`SELECT conname FROM pg_constraint WHERE conrelid = 'projects'::regclass AND conname = $1;`, [uniqueUserProjectNameConstraint]);
     if (uniqueConstraintCheck.rows.length === 0) {
         try {
-            // This requires user_id to be NOT NULL if it's part of the key effectively for all rows.
-            // If user_id can be NULL, then multiple (NULL, 'some_name') entries might be allowed depending on DB,
-            // but our goal is (user_id, name) to be truly unique where user_id is known.
             await client.query(`ALTER TABLE projects ADD CONSTRAINT ${uniqueUserProjectNameConstraint} UNIQUE (user_id, name);`);
             console.log(`Added UNIQUE constraint ${uniqueUserProjectNameConstraint} on projects(user_id, name).`);
         } catch (e) {
@@ -135,9 +154,9 @@ async function initializeSchema() {
          console.log(`UNIQUE constraint ${uniqueUserProjectNameConstraint} on projects(user_id, name) already exists.`);
     }
 
-    // 7. Indexes. The UNIQUE constraint 'projects_user_id_name_key' already creates an index on (user_id, name).
-    await client.query('DROP INDEX IF EXISTS idx_projects_name;'); // For any old global name index.
-    await client.query('CREATE INDEX IF NOT EXISTS idx_projects_user_id ON projects(user_id);'); // Useful for user-specific queries.
+    // 7. Indexes.
+    await client.query('DROP INDEX IF EXISTS idx_projects_name;'); 
+    await client.query('CREATE INDEX IF NOT EXISTS idx_projects_user_id ON projects(user_id);'); 
     console.log('Ensured necessary indexes on "projects" table.');
 
     // --- Pages table ---

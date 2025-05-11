@@ -31,7 +31,7 @@ function focusOnFirstCellOfTable(tableElement, selectionInstance, liveEditor) {
 
 
 export const dividerCommand = {
-    command: 'divider', short: 'hr', icon: 'command-icon', iconClass: 'fas fa-minus', text: 'Divider', description: 'Insert a horizontal line', category: 'Media',
+    command: 'divider', short: ['hr', 'dv', 'div'], icon: 'command-icon', iconClass: 'fas fa-minus', text: 'Divider', description: 'Insert a horizontal line', category: 'Media',
     execute: (appContext, { selection, range }) => {
         const { liveEditor } = appContext;
         liveEditor.focus();
@@ -69,7 +69,7 @@ export const dividerCommand = {
 };
 
 export const codeBlockCommand = {
-    command: 'code-block', short: 'cb', icon: 'command-icon', iconClass: 'fas fa-code', text: 'Code Block', description: 'Insert formatted code', category: 'Media',
+    command: 'code-block', short: ['cb'], icon: 'command-icon', iconClass: 'fas fa-code', text: 'Code Block', description: 'Insert formatted code', category: 'Media',
     execute: (appContext, { currentBlock, selection, range }) => {
         const { liveEditor } = appContext;
         const pre = document.createElement('pre');
@@ -113,7 +113,7 @@ export const codeBlockCommand = {
 };
 
 export const tableCommand = {
-    command: 'table', short: 'tbl', icon: 'command-icon', iconClass: 'fas fa-table', text: 'Table', description: 'Insert a 2x2 table', category: 'Media',
+    command: 'table', short: ['tbl', 'tb'], icon: 'command-icon', iconClass: 'fas fa-table', text: 'Table', description: 'Insert a 2x2 table', category: 'Media',
     execute: (appContext, { currentBlock, selection, range }) => {
         const { liveEditor } = appContext;
         const table = document.createElement('table');

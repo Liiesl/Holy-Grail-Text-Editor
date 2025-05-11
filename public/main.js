@@ -3,6 +3,7 @@
 import { initSidePanel } from './sidePanel.js';
 import { initEditArea } from './editArea.js';
 import { initSlashCommand } from './SCMD/slashCommand.js';
+import { initHomepage } from './homePage.js'; // ADDED
 import { initTextStyleModal } from './textStyleModal.js';
 import { initTableEditor } from './tableEditor.js';
 import { initEmojiModal } from './SCMD/emojiModal.js';
@@ -59,6 +60,8 @@ document.addEventListener('DOMContentLoaded', () => {
        // Core functions (some are for main editor, some are global utilities)
        showStatus: null, // This will be the global showStatus
        // Methods specific to main editor instance, will be populated by initEditArea
+       displayHomepage: null, // ADDED: For homepage module
+       clearHomepage: null,   // ADDED: For homepage module       
        updateSaveButtonState: null, 
        clearEditor: null, 
        loadPageContent: null,
@@ -88,7 +91,8 @@ document.addEventListener('DOMContentLoaded', () => {
        closeEmbedPageModal: null,
        removeSlashCommandTextFromEditor: null,
        closeSlashCommandModal: null,
-       
+
+       slashCommandInstance: null, // For the main editor's SCMD instance
        // Auth functions
        checkAuthStatus: null, 
        showLoginScreen: null, 
@@ -241,11 +245,22 @@ document.addEventListener('DOMContentLoaded', () => {
         appContext.currentPageState = null; // Clear global current page state
         appContext.hasUnsavedChanges = false; // Reset global unsaved changes flag
 
-        if (appContext.clearEditor) appContext.clearEditor(true); // Call the main editor's clear function
-        if (appContext.currentPageDisplay) appContext.currentPageDisplay.textContent = 'No page selected';
-        if (appContext.savePageBtn) appContext.savePageBtn.disabled = true;
-        
-        if (appContext.renderUserProfile) appContext.renderUserProfile(); 
+        // Explicitly clear editor for logout, don't rely on clearEditor(true)
+        // which might try to show homepage if user context was briefly available.
+        if (appContext.liveEditor) {
+            appContext.liveEditor.innerHTML = '';
+            appContext.liveEditor.contentEditable = 'true';
+            appContext.liveEditor.dataset.placeholder = "Type '/' for commands, or start writing...";
+            appContext.liveEditor.classList.add('is-empty');
+        }
+         if (appContext.currentPageDisplay) appContext.currentPageDisplay.textContent = 'No page selected';
+         if (appContext.savePageBtn) appContext.savePageBtn.disabled = true;
+         
+        // Clear user profile area
+        if (appContext.userProfileAreaContainer) {
+            appContext.userProfileAreaContainer.innerHTML = '';
+        }
+
         if (appContext.pageTreeContainer) appContext.pageTreeContainer.innerHTML = '<p style="padding: 0 10px; font-size: 0.9em; color: var(--text-secondary);">Please log in to see projects.</p>';
         const projectsHeadingContainer = document.getElementById('projects-heading-container');
         if(projectsHeadingContainer) projectsHeadingContainer.innerHTML = ''; 
@@ -264,18 +279,26 @@ document.addEventListener('DOMContentLoaded', () => {
    initEditArea(appContext); 
 
    initSidePanel(appContext); 
-   initSlashCommand(appContext);
+   appContext.slashCommandInstance = initSlashCommand(appContext); // Initialize for main editor
    initTextStyleModal(appContext);
    initTableEditor(appContext);
    initEmojiModal(appContext);
    initMoreOptionsModal(appContext);
    initEmbedPageModal(appContext);
    initUserSettingsModal(appContext); 
+   initHomepage(appContext); // ADDED: Initialize the homepage system
    initPagePeekModalSystem(appContext); // ADDED: Initialize the peek modal system
 
    window.addEventListener('beforeunload', (event) => {
        let unsavedInPeek = false;
        if (appContext.activePeekModals) {
+           // Check if any peek modal's SCMD is active and might have unconfirmed input
+           const sCMDActiveInPeek = appContext.activePeekModals.some(
+               modal => modal.isSlashCommandActive && modal.slashCommandInfo && modal.slashCommandInfo.textNode.textContent.substring(modal.slashCommandInfo.offset).length > 0
+           );
+           if (sCMDActiveInPeek) { // If SCMD has pending input, consider it "unsaved" for this check
+               unsavedInPeek = true;
+           }
            unsavedInPeek = appContext.activePeekModals.some(modal => modal.hasUnsavedChanges && !modal.isMinimized);
        }
        if (appContext.hasUnsavedChanges || unsavedInPeek) {
@@ -287,17 +310,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
     window.addEventListener('keydown', (event) => {
         if (event.key === 'Escape') {
+            // Do not let global Escape interfere if a SCMD is active in any editor
+            if (appContext.isSlashCommandActive) { // Main editor's SCMD
+                // Let the SCMD's own keydown handler deal with Escape
+                return;
+            }
+            if (appContext.activePeekModals && appContext.activePeekModals.some(m => m.isSlashCommandActive)) {
+                // Let the SCMD's own keydown handler in the peek modal deal with Escape
+                return;
+            }
+
             // Prioritize closing the topmost, non-minimized peek modal
             const topPeekModal = appContext.getTopPeekModal ? appContext.getTopPeekModal() : null;
             if (topPeekModal && topPeekModal.domElement.style.display !== 'none' && !topPeekModal.isMinimized) {
-                topPeekModal.close(); // Attempt to close it (might ask for confirmation)
+                if (topPeekModal.close) topPeekModal.close(); // Attempt to close it (might ask for confirmation)
                 return; // Stop further Escape processing
             }
             // Then other modals as before
             if (appContext.actionsModal && appContext.actionsModal.style.display !== 'none') {
                 appContext.actionsModal.style.display = 'none';
             }
-            if (appContext.userSettingsModal && appContext.userSettingsModal.style.display !== 'none' && appContext.closeUserSettingsModal) {
+            if (appContext.userSettingsModal && appContext.userSettingsModal.style.display !== 'none' && appContext.closeUserSettingsModal) { // Check if modal is closable
                 appContext.closeUserSettingsModal();
             }
             if (appContext.embedPageModal && appContext.embedPageModal.style.display !== 'none') { 
@@ -325,7 +358,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
    if (appContext.checkAuthStatus) {
-       appContext.checkAuthStatus(); 
+        appContext.checkAuthStatus() // This often triggers sidePanel's fetchProjectsAndDisplay
+            .then(() => {
+                // After auth is checked and initial project/page load MIGHT have happened...
+                if (appContext.currentUser && !appContext.currentProject && !appContext.currentPageState && appContext.displayHomepage) {
+                    // If user is logged in, but NO project is active (e.g., user has no projects, or initial load failed)
+                    // and no page is loaded, then display the main homepage.
+                    appContext.displayHomepage();
+                }
+            });
    } else {
        console.error("checkAuthStatus function not initialized. Auth will not work.");
        if (appContext.showLoginScreen) appContext.showLoginScreen(); 

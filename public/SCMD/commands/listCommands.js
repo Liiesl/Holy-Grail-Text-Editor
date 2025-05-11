@@ -9,7 +9,7 @@ function findCurrentBlockForList(node, liveEditor) { // Simplified from slashCom
 }
 
 export const bulletListCommand = {
-    command: 'bullet-list', short: 'bl', icon: 'command-icon', iconClass: 'fas fa-list-ul', text: 'Bullet List', description: 'Create a bulleted list', category: 'Lists',
+    command: 'bullet-list', short: ['bl', 'b'], icon: 'command-icon', iconClass: 'fas fa-list-ul', text: 'Bullet List', description: 'Create a bulleted list', category: 'Lists',
     execute: (appContext, { selection, range }) => {
         appContext.liveEditor.focus();
         if (selection && range) { selection.removeAllRanges(); selection.addRange(range); }
@@ -19,7 +19,7 @@ export const bulletListCommand = {
 };
 
 export const numberedListCommand = {
-    command: 'numbered-list', short: 'nl', icon: 'command-icon', iconClass: 'fas fa-list-ol', text: 'Numbered List', description: 'Create a numbered list', category: 'Lists',
+    command: 'numbered-list', short: ['nl', 'num'], icon: 'command-icon', iconClass: 'fas fa-list-ol', text: 'Numbered List', description: 'Create a numbered list', category: 'Lists',
     execute: (appContext, { selection, range }) => {
         appContext.liveEditor.focus();
         if (selection && range) { selection.removeAllRanges(); selection.addRange(range); }
@@ -29,7 +29,7 @@ export const numberedListCommand = {
 };
 
 export const checklistCommand = {
-    command: 'checklist', short: 'cl', icon: 'command-icon', iconClass: 'fas fa-tasks', text: 'Checklist', description: 'Create a task list', category: 'Lists',
+    command: 'checklist', short: ['cl', 'check'], icon: 'command-icon', iconClass: 'fas fa-tasks', text: 'Checklist', description: 'Create a task list', category: 'Lists',
     execute: (appContext, { currentBlock, selection, range }) => {
         const { liveEditor } = appContext;
         const checklistItem = document.createElement('div');

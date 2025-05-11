@@ -2,7 +2,7 @@
 
 export const createSubpageCommand = {
     command: 'create-subpage',
-    short: 'sp',
+    short: ['sp', 'np', 'newpage', 'ns', 'cs'],
     icon: 'command-icon',
     iconClass: 'fas fa-file-lines',
     text: 'New Subpage',
@@ -69,7 +69,7 @@ export const createSubpageCommand = {
 
 export const embedPageCommand = {
     command: 'embed-page',
-    short: 'ep',
+    short: ['ep', 'embed', 'lp'],
     icon: 'command-icon',
     iconClass: 'fas fa-file-import',
     text: 'Embed Page',
@@ -134,5 +134,42 @@ export const embedPageCommand = {
             }
             return true; // Standard cleanup because the command effectively failed to launch its UI.
         }
+    }
+};
+
+export const openInPagePeekCommand = { // NEW COMMAND
+    command: 'open-in-peek',
+    short: ['peek', 'op', 'openpeek', 'viewpeek'],
+    icon: 'command-icon',
+    iconClass: 'fas fa-window-restore', // Icon for peeking or opening in a new view
+    text: 'Open in Page Peek',
+    description: 'Open the current page in a peek window',
+    category: 'Pages',
+    canExecute: (appContext) => {
+        // Command can execute if a page is loaded in the main editor and peek functionality is available
+        return !!(appContext.currentPageState && appContext.currentPageState.id && appContext.openPageInPeekMode);
+    },
+    execute: (appContext, options) => { // options contains: { currentBlock, selection, range, slashCmdFinalRect, originalSlashCommandInfo, currentSearchQuery }
+        const { currentPageState, currentProject, openPageInPeekMode, showStatus } = appContext;
+
+        if (!currentPageState || !currentPageState.id) {
+            if (showStatus) showStatus('Cannot open in peek: No current page loaded in the main editor.', 'error');
+            return true; // Allow default slash command cleanup; command effectively failed.
+        }
+        if (!openPageInPeekMode) {
+            if (showStatus) showStatus('Cannot open in peek: Page peek functionality is not available.', 'error');
+            return true; // Allow default slash command cleanup; command effectively failed.
+        }
+
+        // Open the current main editor page in a new peek modal
+        openPageInPeekMode(currentPageState.id, currentProject);
+        
+        // No specific message needed on success, as the peek window opening is the feedback.
+        // Optionally, show a status:
+        // if (showStatus) showStatus(`Page "${currentPageState.title}" opened in peek window.`, 'success', 2000);
+
+        // Return true to indicate that standard slash command cleanup should proceed
+        // (i.e., remove slash text, close slash command modal).
+        return true;
     }
 };

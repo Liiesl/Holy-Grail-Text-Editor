@@ -45,26 +45,26 @@ const formatBlock = (appContext, tagName, { currentBlock, selection, range }) =>
 };
 
 export const paragraphCommand = {
-    command: 'paragraph', short: 'p', icon: 'command-icon-text', iconText: 'P', text: 'Paragraph', description: 'Basic text block', category: 'Basic',
+    command: 'paragraph', short: ['p', 'pg'], icon: 'command-icon-text', iconText: 'P', text: 'Paragraph', description: 'Basic text block', category: 'Basic',
     execute: (appContext, options) => formatBlock(appContext, 'p', options)
 };
 
 export const h1Command = {
-    command: 'h1', short: 'h1', icon: 'command-icon-text', iconText: 'H1', text: 'Heading 1', description: 'Large heading', category: 'Basic',
+    command: 'h1', short: ['h1', 'header'], icon: 'command-icon-text', iconText: 'H1', text: 'Heading 1', description: 'Large heading', category: 'Basic',
     execute: (appContext, options) => formatBlock(appContext, 'h1', options)
 };
 
 export const h2Command = {
-    command: 'h2', short: 'h2', icon: 'command-icon-text', iconText: 'H2', text: 'Heading 2', description: 'Medium heading', category: 'Basic',
+    command: 'h2', short: ['h2', 'header'], icon: 'command-icon-text', iconText: 'H2', text: 'Heading 2', description: 'Medium heading', category: 'Basic',
     execute: (appContext, options) => formatBlock(appContext, 'h2', options)
 };
 
 export const h3Command = {
-    command: 'h3', short: 'h3', icon: 'command-icon-text', iconText: 'H3', text: 'Heading 3', description: 'Small heading', category: 'Basic',
+    command: 'h3', short: ['h3', 'header'], icon: 'command-icon-text', iconText: 'H3', text: 'Heading 3', description: 'Small heading', category: 'Basic',
     execute: (appContext, options) => formatBlock(appContext, 'h3', options)
 };
 
 export const blockquoteCommand = {
-    command: 'blockquote', short: 'bq', icon: 'command-icon', iconClass: 'fas fa-quote-left', text: 'Quote Block', description: 'Insert a blockquote', category: 'Media', // Category was basic, but fits Media better
+    command: 'blockquote', short: ['bq', 'qb', 'quote', 'q'], icon: 'command-icon', iconClass: 'fas fa-quote-left', text: 'Quote Block', description: 'Insert a blockquote', category: 'Media', // Category was basic, but fits Media better
     execute: (appContext, options) => formatBlock(appContext, 'blockquote', options)
 };

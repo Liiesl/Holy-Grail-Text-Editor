@@ -1,8 +1,8 @@
 /* --- START OF FILE improved-slashCommand.css --- */
 
-#slash-command-modal {
+#slash-command-modal, .slash-command-modal {
     position: fixed; /* Crucial for JS positioning */
-    z-index: 1000;      /* Keep on top */
+    z-index: 2000;      /* Keep on top */
     background-color: var(--bg-tertiary);
     border: 1px solid var(--border-color-primary);
     border-radius: var(--border-radius);
@@ -22,7 +22,7 @@
 }
 
 /* No results message */
-#slash-command-modal .no-results {
+#slash-command-modal .no-results, .slash-command-modal .no-results {
     padding: 12px;
     color: var(--text-secondary);
     text-align: center;
@@ -30,14 +30,14 @@
 }
 
 /* Command list container */
-#slash-command-modal .command-list {
+#slash-command-modal .command-list, .slash-command-modal .command-list {
     list-style: none;
     margin: 0;
     padding: 0;
 }
 
 /* Command category header */
-#slash-command-modal .command-category {
+#slash-command-modal .command-category, .slash-command-modal .command-category {
     font-size: 0.75rem;
     font-weight: 600;
     text-transform: uppercase;
@@ -46,12 +46,12 @@
     margin-top: 8px;
     letter-spacing: 0.5px;
 }
-#slash-command-modal .command-category:first-child {
+#slash-command-modal .command-category:first-child, .slash-command-modal .command-category:first-child {
     margin-top: 0;
 }
 
 /* Command items */
-#slash-command-modal li {
+#slash-command-modal li, .slash-command-modal li {
     display: flex;
     align-items: center;
     gap: 12px; /* Slightly increased gap */
@@ -62,13 +62,15 @@
     transition: background-color 0.15s ease, color 0.15s ease;
     margin-bottom: 2px; /* Small gap between items */
 }
-#slash-command-modal li:last-child {
+#slash-command-modal li:last-child, .slash-command-modal li:last-child {
     margin-bottom: 0;
 }
 
 /* Common style for all icon containers/elements */
 #slash-command-modal .command-icon,
-#slash-command-modal .command-icon-text {
+#slash-command-modal .command-icon-text, 
+.slash-command-modal .command-icon,
+.slash-command-modal .command-icon-text {
     width: 28px; /* Icon container width */
     height: 28px; /* Icon container height */
     display: flex;
@@ -81,7 +83,7 @@
 }
 
 /* Specific for text-based icons like H1, H2 */
-#slash-command-modal .command-icon-text {
+#slash-command-modal .command-icon-text, .slash-command-modal .command-icon-text {
     color: var(--text-secondary);
     font-weight: 600;
     font-size: 0.85em; /* Text for H1/H2 etc. */
@@ -90,14 +92,14 @@
 }
 
 /* Specific for FontAwesome icons */
-#slash-command-modal .command-icon {
+#slash-command-modal .command-icon, .slash-command-modal .command-icon {
     color: var(--text-secondary);
     font-size: 1.1em; /* Adjust FA icon size if needed */
     background-color: var(--bg-secondary);
 }
 
 /* Command text content container */
-#slash-command-modal .command-text {
+#slash-command-modal .command-text, .slash-command-modal .command-text {
     flex-grow: 1;
     display: flex;
     flex-direction: column;
@@ -105,14 +107,14 @@
 }
 
 /* Command title */
-#slash-command-modal .command-title {
+#slash-command-modal .command-title, .slash-command-modal .command-title {
     font-weight: 500;
     color: var(--text-primary);
     line-height: 1.3;
 }
 
 /* Command description */
-#slash-command-modal .command-description {
+#slash-command-modal .command-description, .slash-command-modal .command-description {
     font-size: 0.8rem;
     color: var(--text-tertiary);
     line-height: 1.3;
@@ -120,31 +122,42 @@
 
 /* Hover and Active States */
 #slash-command-modal li:hover,
-#slash-command-modal li.selected {
+#slash-command-modal li.selected,
+.slash-command-modal li:hover,
+.slash-command-modal li.selected {
     background-color: var(--accent-primary);
 }
 
 #slash-command-modal li:hover .command-title,
-#slash-command-modal li.selected .command-title {
+#slash-command-modal li.selected .command-title,
+.slash-command-modal li:hover .command-title,
+.slash-command-modal li.selected .command-title {
     color: white;
 }
 
 #slash-command-modal li:hover .command-description,
-#slash-command-modal li.selected .command-description {
+#slash-command-modal li.selected .command-description,
+.slash-command-modal li:hover .command-description,
+.slash-command-modal li.selected .command-description{
     color: rgba(255, 255, 255, 0.8);
 }
 
 #slash-command-modal li:hover .command-icon, 
 #slash-command-modal li:hover .command-icon-text,
 #slash-command-modal li.selected .command-icon,
-#slash-command-modal li.selected .command-icon-text {
+#slash-command-modal li.selected .command-icon-text,
+.slash-command-modal li:hover .command-icon,
+.slash-command-modal li:hover .command-icon-text,
+.slash-command-modal li.selected .command-icon,
+.slash-command-modal li.selected .command-icon-text {
     color: white; 
     background-color: transparent;
     border-color: transparent; /* Hide border on text icons when hovered */
 }
 
 /* Keyboard shortcut styling (future enhancement) */
-#slash-command-modal .command-shortcut {
+#slash-command-modal .command-shortcut,
+.slash-command-modal .command-shortcut {
     flex-shrink: 0;
     color: var(--text-tertiary);
     font-size: 0.75rem;
@@ -152,24 +165,30 @@
 }
 
 #slash-command-modal li:hover .command-shortcut,
-#slash-command-modal li.selected .command-shortcut {
+#slash-command-modal li.selected .command-shortcut,
+.slash-command-modal li:hover .command-shortcut,
+.slash-command-modal li.selected .command-shortcut {
     color: rgba(255, 255, 255, 0.7);
 }
 
 /* Scrollbar styling for the modal */
-#slash-command-modal::-webkit-scrollbar {
+#slash-command-modal::-webkit-scrollbar,
+.slash-command-modal::-webkit-scrollbar {
     width: 6px;
     height: 6px;
 }
-#slash-command-modal::-webkit-scrollbar-thumb {
+#slash-command-modal::-webkit-scrollbar-thumb,
+.slash-command-modal::-webkit-scrollbar-thumb {
     background-color: var(--border-color-secondary);
     border-radius: 3px;
 }
-#slash-command-modal::-webkit-scrollbar-track {
+#slash-command-modal::-webkit-scrollbar-track,
+.slash-command-modal::-webkit-scrollbar-track {
     background: transparent;
 }
 /* For Firefox */
-#slash-command-modal {
+#slash-command-modal,
+.slash-command-modal {
   scrollbar-width: thin;
   scrollbar-color: var(--border-color-secondary) transparent;
 }

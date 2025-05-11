@@ -87,6 +87,9 @@
     font-size: 0.9em; /* Slightly smaller font for the embed */
     transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
     cursor: pointer; /* UPDATED: Explicitly set pointer */
+    user-select: none; /* ADDED: Prevent text selection within the link */
+    /* For true non-editability within a contenteditable parent,
+       the <a> tag itself should have contenteditable="false" (set via JavaScript) */
 }
 
 #live-editor a[href^="page://"]::before,

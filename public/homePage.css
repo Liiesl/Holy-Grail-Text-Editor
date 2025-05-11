@@ -1,0 +1,135 @@
+/* homepage.css */
+#homepage-content {
+    padding: 25px 30px; /* Consistent with editor-top-bar horizontal padding */
+    color: var(--text-primary);
+    overflow-y: auto;
+    height: 100%; /* Takes full height of its container (editor-panes > live-editor) */
+}
+
+#homepage-content h2 {
+    font-size: 1.8em;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 25px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-color-primary);
+}
+
+#homepage-content .project-list {
+    list-style: none;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); /* Adjusted minmax for potentially taller cards */
+    gap: 20px; /* Increased gap slightly */
+}
+
+.project-link {
+    display: block;
+    position: relative; /* For positioning children */
+    height: 180px; /* Fixed height for the card */
+    border-radius: var(--border-radius);
+    border: 1px solid var(--border-color-primary);
+    overflow: hidden; /* To clip children to border-radius */
+    text-decoration: none;
+    cursor: pointer;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.15); /* Slightly more pronounced shadow */
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.project-link-bg-top{
+    position: absolute;
+    left: 0;
+    right: 0;
+    width: 100%;
+    height: 70%;
+    z-index: 1;
+    transition: background-color 0.2s ease; /* For potential hover effects on bg */
+}
+.project-link-bg-bottom {
+    position: absolute;
+    left: 0;
+    right: 0;
+    width: 100%;
+    height: 30%;
+    z-index: 1;
+    transition: background-color 0.2s ease; /* For potential hover effects on bg */
+}
+
+.project-link-bg-top {
+    top: 0;
+    background-color: var(--bg-tertiary); /* Lighter half - e.g., #2f2f2f */
+}
+
+.project-link-bg-bottom {
+    bottom: 0;
+    background-color: var(--bg-secondary); /* Darker half - e.g., #202020 */
+}
+
+.project-link-content {
+    position: absolute;
+    top: 40%;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    padding: 15px;
+    z-index: 2; /* Above the background divs */
+    text-align: center;
+    gap: 0.6em;
+    -webkit-user-select: none; /* Safari */
+    -moz-user-select: none;    /* Firefox */
+    -ms-user-select: none;     /* IE10+/Edge */
+    user-select: none;         /* Standard */
+}
+
+.project-link-content .project-icon {
+    font-size: 1.5em; /* Larger icon */
+    color: var(--text-primary);
+    transition: color 0.15s ease;
+}
+
+.project-link-content .project-name-text {
+    font-weight: 500;
+    font-size: 1.2em; /* Adjusted font size */
+    color: var(--text-primary);
+    max-width: 100%; /* Ensure it doesn't overflow padding */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: color 0.15s ease;
+}
+
+.project-link:hover {
+    box-shadow: 0 6px 12px rgba(0,0,0,0.25); /* Enhanced shadow on hover */
+    border-color: var(--accent-primary);
+}
+
+.project-link:hover .project-icon,
+.project-link:hover .project-name-text {
+    color: var(--accent-primary); /* Icon and text color change on hover */
+}
+
+/* Optional: if you want the background halves to change color on hover too */
+/*
+.project-link:hover .project-link-bg-top {
+    background-color: lighten(var(--bg-tertiary), 5%); 
+}
+.project-link:hover .project-link-bg-bottom {
+    background-color: lighten(var(--bg-secondary), 5%);
+}
+*/
+
+
+#homepage-content .no-projects {
+    font-size: 1.1em;
+    color: var(--text-secondary);
+    font-style: italic;
+    padding: 30px 20px;
+    text-align: center;
+    background-color: var(--bg-secondary);
+    border-radius: var(--border-radius);
+    border: 1px dashed var(--border-color-primary);
+    margin-top: 20px;
+}

@@ -93,6 +93,8 @@ export function initMoreOptionsModal(appContext) {
                 case 'peek-page': // ADDED
                     if (appContext.currentPageState && appContext.currentPageState.id) {
                         if (appContext.openPageInPeekMode) {
+                            // Peeking the *current* page from "More Options" is generally okay,
+                            // as peek view is a separate, non-editing view.
                             appContext.openPageInPeekMode(appContext.currentPageState.id, appContext.currentProject);
                         } else {
                             console.warn('openPageInPeekMode function not available on appContext.');

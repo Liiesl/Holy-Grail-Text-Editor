@@ -63,6 +63,53 @@
     background-color: var(--bg-tertiary);
     color: var(--text-primary);
 }
+/* -------------------- */
+/* --- HOME BUTTON ---- */
+/* -------------------- */
+
+.home-button-section {
+    /* This container provides spacing for the home button element
+       between the user profile area and the projects heading. */
+    padding: 10px 0px; /* Vertical padding around the button. 0px horizontal as button takes full width. */
+    flex-shrink: 0; /* Prevent shrinking if sidebar content overflows */
+}
+
+.sidebar-home-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px; /* Space between icon and text, consistent with project/page items */
+    width: 100%; /* Make the button span the full available width */
+    padding: 8px 10px; /* Padding inside the button, matches .project-header */
+    cursor: pointer;
+    border-radius: var(--border-radius); /* Use standard border radius */
+    border: none; /* Remove default button border */
+    background-color: transparent; /* No background by default */
+    text-align: left; /* Align icon and text to the left */
+
+    font-weight: 500; /* Consistent with .project-header and .username-display */
+    font-size: 0.95em; /* Consistent with #page-tree items */
+    color: var(--text-secondary); /* Default text color */
+    transition: background-color 0.15s ease, color 0.15s ease; /* Smooth hover transition */
+
+    /* Prevent text selection */
+    -webkit-user-select: none; /* Safari */
+    -moz-user-select: none;    /* Firefox */
+    -ms-user-select: none;     /* IE10+/Edge */
+    user-select: none;         /* Standard */
+}
+
+.sidebar-home-btn:hover {
+    background-color: var(--bg-tertiary); /* Hover background color, matches other items */
+    color: var(--text-primary); /* Hover text color, matches other items */
+}
+
+.sidebar-home-btn .fas { /* Styling for the icon within the home button */
+    font-size: 1em; /* Icon size relative to button's font-size */
+    width: 16px; /* Fixed width for icon alignment, matches .project-header icons */
+    text-align: center; /* Center the icon within its allocated width */
+    flex-shrink: 0; /* Prevent icon from shrinking */
+    /* Color is inherited from .sidebar-home-btn, so it will change on hover as well */
+}
 
 /* -------------------- */
 /* --- SIDEBAR --- */
@@ -84,7 +131,10 @@
 #projects-heading-container {
     margin-bottom: 15px;
     padding-bottom: 10px;
+    padding-top: 10px;
+    padding-left: 10px;
     border-bottom: 1px solid var(--border-color-primary);
+    border-top: 1px solid var(--border-color-primary);
     flex-shrink: 0;
 }
 
@@ -142,6 +192,7 @@
     flex-grow: 1;
     overflow-y: auto;
     font-size: 0.95em;
+    overflow-x: hidden;
 }
 
 .project-list {
@@ -165,6 +216,7 @@
     font-weight: 500;
     color: var(--text-secondary);
     position: relative;
+    width: 90%;
 }
 .project-header:hover {
     background-color: var(--bg-tertiary);
@@ -255,6 +307,7 @@ li.page:not(.has-children) .page-expand-icon {
     transition: background-color 0.15s ease, color 0.15s ease;
     position: relative; /* For absolute positioning of its action group */
     color: var(--text-secondary); /* Default text color for page titles, inherits to .page-title-text */
+    width: 90%;
 }
 
 .page-item-header .page-expand-icon {

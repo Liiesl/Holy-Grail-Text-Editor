@@ -7,7 +7,7 @@ export const emojiCommand = {
     iconClass: '', // No specific class needed if using standard FA
     text: 'Emoji',
     description: 'Insert an emoji character.',
-    category: 'Insert',
+    category: 'misc',
 
     canExecute(appContext) {
         return true; // Emoji command is always available

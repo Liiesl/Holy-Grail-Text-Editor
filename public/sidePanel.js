@@ -56,8 +56,119 @@ export function initSidePanel(appContext) {
     appContext.renderUserProfile = renderUserProfileArea; // Expose for auth_client
 
 
+    // --- START OF MODIFIED CODE: Render Home Button ---
+    function renderHomeButton() {
+        // Remove existing home button container if any to prevent duplicates
+        let homeButtonContainer = document.getElementById('home-button-container');
+        if (homeButtonContainer) {
+            homeButtonContainer.remove();
+        }
+
+        if (!appContext.currentUser) { // Only render if user is logged in
+            return;
+        }
+
+        homeButtonContainer = document.createElement('div');
+        homeButtonContainer.id = 'home-button-container';
+        homeButtonContainer.classList.add('home-button-section'); // For styling (e.g., padding/margin)
+
+        const homeButton = document.createElement('button');
+        homeButton.classList.add('sidebar-home-btn', 'sidebar-nav-item'); // Classes for styling
+        homeButton.id = 'nav-home-btn';
+
+        const homeIcon = document.createElement('i');
+        homeIcon.classList.add('fas', 'fa-home');
+        homeButton.appendChild(homeIcon);
+        homeButton.appendChild(document.createTextNode(' Home'));
+
+        // Helper to clear active visual states in the sidebar
+        const clearSidebarActiveStates = () => {
+            if (appContext.pageTreeContainer) {
+                const currentActivePageItem = appContext.pageTreeContainer.querySelector('li.page.active-page');
+                if (currentActivePageItem) {
+                    currentActivePageItem.classList.remove('active-page');
+                }
+                const currentActiveProjectItem = appContext.pageTreeContainer.querySelector('.project-item.active-project');
+                if (currentActiveProjectItem) {
+                    currentActiveProjectItem.classList.remove('active-project');
+                }
+            }
+        };
+
+        homeButton.addEventListener('click', () => {
+            // Check if already on homepage effectively (content and state)
+            const isAlreadyHome = appContext.liveEditor &&
+                                  appContext.liveEditor.querySelector('#homepage-content') &&
+                                  appContext.currentPageDisplay &&
+                                  appContext.currentPageDisplay.textContent === 'Homepage' &&
+                                  appContext.currentPageState === null &&
+                                  appContext.currentProject === null;
+
+            if (isAlreadyHome) {
+                if(appContext.showStatus) appContext.showStatus("Already on the Homepage.", "info", 1500);
+                return;
+            }
+
+            if (appContext.hasUnsavedChanges && appContext.currentPageState) {
+                if (!confirm('You have unsaved changes. Are you sure you want to navigate to the homepage? Your current work will be lost.')) {
+                    return; // User cancelled
+                }
+                // If confirmed, unsaved changes will be implicitly discarded by navigating.
+                // The state cleanup below will handle hasUnsavedChanges flag.
+            }
+
+            // Proceed to navigate to Home
+            if (appContext.clearEditor) {
+                // clearEditor(false) clears current page, sets currentPageState = null,
+                // and then calls displayHomepage() if user is logged in.
+                // It does NOT nullify currentProject.
+                appContext.clearEditor(false);
+                appContext.currentProject = null; // Explicitly nullify project context for homepage
+            } else if (appContext.displayHomepage) {
+                // Fallback if clearEditor is not available
+                appContext.displayHomepage();
+                appContext.currentPageState = null;
+                appContext.currentProject = null;
+            } else {
+                console.error("Cannot navigate to homepage: Required functions (clearEditor or displayHomepage) not available on appContext.");
+                if (appContext.showStatus) appContext.showStatus("Critical error: Cannot navigate to homepage.", "error");
+                return;
+            }
+
+            // Common state cleanup for being on homepage
+            appContext.hasUnsavedChanges = false;
+            if (appContext.updateSaveButtonState) {
+                appContext.updateSaveButtonState();
+            }
+            if (appContext.autosaveTimeoutId) {
+                clearTimeout(appContext.autosaveTimeoutId);
+                appContext.autosaveTimeoutId = null;
+            }
+
+            clearSidebarActiveStates(); // Clear visual selection in sidebar
+        });
+
+        homeButtonContainer.appendChild(homeButton);
+
+        // Insert after the user profile area container
+        if (userProfileAreaContainer && userProfileAreaContainer.parentNode) {
+            userProfileAreaContainer.insertAdjacentElement('afterend', homeButtonContainer);
+        } else {
+            console.warn("User profile area container not found or has no parent. Home button placement might be incorrect.");
+            // Fallback: try to insert before projectsHeadingContainer
+            if (projectsHeadingContainer && projectsHeadingContainer.parentNode) {
+                 projectsHeadingContainer.parentNode.insertBefore(homeButtonContainer, projectsHeadingContainer);
+            } else {
+                console.error("Could not find a suitable place to insert the Home button in the sidebar.");
+            }
+        }
+    }
+    // --- END OF MODIFIED CODE: Render Home Button ---
+
+
     // --- Action Button Creation Helper ---
     function createActionButton(iconClass, title, clickHandler) {
+        // ... (existing code - no changes)
         const button = document.createElement('button');
         button.classList.add('sidebar-action-btn');
         button.title = title;
@@ -73,6 +184,7 @@ export function initSidePanel(appContext) {
 
     // --- Render Projects H2 with Actions ---
     function renderProjectsHeading() {
+        // ... (existing code - no changes)
         if (!projectsHeadingContainer) {
             console.warn("Projects heading container not found.");
             return;
@@ -107,7 +219,7 @@ export function initSidePanel(appContext) {
     }
 
 
-    appContext.openActionsModal = (event, targetType, targetId, targetName) => {
+    appContext.openActionsModal = (event, targetType, targetId, targetName, projectContextName = null) => {
         if (!actionsModal) return;
         const actionsList = actionsModal.querySelector('#actions-modal-list');
         const modalContentElement = actionsModal.querySelector('.modal-content') || actionsModal;
@@ -116,24 +228,80 @@ export function initSidePanel(appContext) {
         actionsList.innerHTML = '';
 
         let actions = [];
-        // ... (your existing action definitions based on targetType)
+        
         if (targetType === 'projects-list') {
             actions = [
                 { label: 'Sort Projects A-Z', icon: 'fa-sort-alpha-down', handler: () => { console.log('Sort Projects A-Z (NYI)'); showStatus('Sort Projects A-Z (Not Yet Implemented)', 'info'); } },
             ];
         } else if (targetType === 'project') {
+            // targetId is projectName, projectContextName is also projectName
+            const projectNameForPeek = targetId;
             actions = [
                 { label: `Rename Project "${targetName}"`, icon: 'fa-edit', handler: () => appContext.renameProject(targetId, targetName) },
                 { label: `Duplicate Project "${targetName}"`, icon: 'fa-copy', handler: () => appContext.duplicateProject(targetId, targetName) },
                 { label: `Delete Project "${targetName}"`, icon: 'fa-trash-alt', handler: () => appContext.deleteProject(targetId, targetName) },
                 { label: `Sort Pages A-Z`, icon: 'fa-sort-alpha-down', handler: () => { console.log(`Sort Pages A-Z for ${targetName} (NYI)`); showStatus('Sort Pages A-Z (Not Yet Implemented)', 'info');} },
+                { 
+                    label: `Peek Root Page of "${targetName}"`, 
+                    icon: 'fa-eye', 
+                    handler: async () => {
+                        const projectItem = pageTreeContainer.querySelector(`.project-item[data-project-name="${CSS.escape(projectNameForPeek)}"]`);
+                        if (!projectItem) {
+                            showStatus(`Project item for "${projectNameForPeek}" not found.`, 'error');
+                            return;
+                        }
+                        let rootPageId = projectItem.dataset.rootPageId;
+
+                        if (!rootPageId || rootPageId === 'null' || rootPageId === 'undefined') {
+                            if (appContext.fetchPageTree) {
+                                console.log(`Root page ID for ${projectNameForPeek} not in dataset, attempting to fetch tree.`);
+                                rootPageId = await appContext.fetchPageTree(projectNameForPeek); // Fetches tree and returns rootPageId
+                            } else {
+                                showStatus('Cannot determine root page: fetchPageTree not available.', 'warn');
+                                return;
+                            }
+                        }
+
+                        if (rootPageId && rootPageId !== 'null' && rootPageId !== 'undefined') {
+                            if (appContext.currentPageState && appContext.currentPageState.id === rootPageId && appContext.currentProject === projectNameForPeek) {
+                                showStatus('Cannot peek the currently active page. Open another page first.', 'info');
+                                return;
+                            }
+                            if (appContext.openPageInPeekMode) {
+                                appContext.openPageInPeekMode(rootPageId, projectNameForPeek);
+                            } else {
+                                console.warn('openPageInPeekMode function not available on appContext.');
+                                showStatus('Peek feature not available.', 'error');
+                            }
+                        } else {
+                            showStatus(`Project "${projectNameForPeek}" has no root page or is empty.`, 'info');
+                        }
+                    } 
+                },
             ];
         } else if (targetType === 'page') {
-             actions = [
-                { label: `Rename Page "${targetName}"`, icon: 'fa-edit', handler: () => appContext.renamePage(appContext.currentProject, targetId, targetName) },
-                { label: `Duplicate Page "${targetName}"`, icon: 'fa-copy', handler: () => appContext.duplicatePage(appContext.currentProject, targetId, targetName) },
-                { label: `Delete Page "${targetName}"`, icon: 'fa-trash-alt', handler: () => appContext.deletePage(appContext.currentProject, targetId, targetName) },
+            // targetId is pageId, projectContextName is the project this page belongs to
+            actions = [
+                { label: `Rename Page "${targetName}"`, icon: 'fa-edit', handler: () => appContext.renamePage(projectContextName, targetId, targetName) },
+                { label: `Duplicate Page "${targetName}"`, icon: 'fa-copy', handler: () => appContext.duplicatePage(projectContextName, targetId, targetName) },
+                { label: `Delete Page "${targetName}"`, icon: 'fa-trash-alt', handler: () => appContext.deletePage(projectContextName, targetId, targetName) },
                 { label: `Sort Subpages A-Z`, icon: 'fa-sort-alpha-down', handler: () => { console.log(`Sort Subpages A-Z for ${targetName} (NYI)`); showStatus('Sort Subpages A-Z (Not Yet Implemented)', 'info'); } },
+                { 
+                    label: `Peek Page "${targetName}"`, 
+                    icon: 'fa-eye', 
+                    handler: () => {
+                        if (appContext.currentPageState && appContext.currentPageState.id === targetId && appContext.currentProject === projectContextName) {
+                            showStatus('Cannot peek the currently active page. Open another page first.', 'info');
+                            return;
+                        }
+                        if (appContext.openPageInPeekMode) {
+                            appContext.openPageInPeekMode(targetId, projectContextName);
+                        } else {
+                            console.warn('openPageInPeekMode function not available on appContext.');
+                            showStatus('Peek feature not available.', 'error');
+                        }
+                    }
+                },
             ];
         }
 
@@ -252,8 +420,93 @@ export function initSidePanel(appContext) {
         }
     }
 
+    // --- Select Project Handler ---
+    async function selectProjectHandler(projectName, projectLiElement) {
+        if (!projectLiElement) {
+            console.error(`selectProjectHandler: projectLiElement for project "${projectName}" is missing.`);
+            if (showStatus) showStatus(`Could not find project "${projectName}" in the sidebar.`, 'error');
+            return;
+        }
+
+        const isProjectAlreadyActive = appContext.currentProject === projectName;
+        const rootPageIdFromDataset = projectLiElement.dataset.rootPageId;
+        const rootPageId = (rootPageIdFromDataset && rootPageIdFromDataset !== 'null' && rootPageIdFromDataset !== 'undefined') ? rootPageIdFromDataset : null;
+        // Check if the currently displayed page (if any) is the root page of the project being selected
+        const isCurrentlyOnThisProjectsRootPage = isProjectAlreadyActive && rootPageId && appContext.currentPageState?.id === rootPageId;
+
+        if (isProjectAlreadyActive && isCurrentlyOnThisProjectsRootPage) {
+            if (showStatus) showStatus(`Project ${projectName} is already active and its main page is displayed.`, 'info');
+            return; 
+        }
+
+        if (appContext.hasUnsavedChanges && appContext.currentPageState) {
+            if (!confirm('You have unsaved changes. Are you sure you want to switch context? Your changes will be lost.')) {
+                return;
+            }
+            if (appContext.clearEditor) appContext.clearEditor(true); // true for fullClear will reset project, then displayHomepage if logged in
+        } else if (appContext.currentPageState && appContext.clearEditor) { 
+            // If no unsaved changes but a page is loaded, clear it before loading another project's page.
+            // clearEditor(false) clears current page, then calls displayHomepage if user is logged in.
+            // This might not be desired if we are immediately loading another page.
+            // However, setActiveSidebarItem and loadPageContent will handle the new state.
+             appContext.clearEditor(false); // Clears current page, sets currentPageState to null.
+        }
+        
+        setActiveSidebarItem(projectLiElement); // Sets appContext.currentProject and active visual state
+
+        // Load Root Page Content or fetch tree if root ID is unknown
+        if (rootPageId) {
+            if (appContext.loadPageContent) {
+                await appContext.loadPageContent(projectName, rootPageId);
+            } else {
+                 console.error("selectProjectHandler: loadPageContent not available on appContext");
+                 if (showStatus) showStatus("Error: Cannot load page content.", "error");
+            }
+        } else {
+            const projectPagesDiv = projectLiElement.querySelector('.project-pages-container');
+            if (!projectPagesDiv) {
+                console.error(`selectProjectHandler: projectPagesDiv not found for project "${projectName}".`);
+                if (showStatus) showStatus(`UI error for project "${projectName}".`, 'error');
+                return;
+            }
+
+            if (appContext.fetchPageTree) {
+                // Fetch tree (which populates projectPagesDiv and dataset.rootPageId) and get the rootPageId
+                const fetchedRootPageId = await appContext.fetchPageTree(projectName, null, projectPagesDiv);
+                if (fetchedRootPageId && appContext.loadPageContent) {
+                    await appContext.loadPageContent(projectName, fetchedRootPageId);
+                } else if (!fetchedRootPageId) {
+                    // Project is empty or error fetching tree
+                    console.warn(`Project ${projectName} is empty or rootPageId not found after fetchPageTree.`);
+                    // appContext.clearEditor(false) would clear editor and display homepage.
+                    // Since we are in a project context, maybe just show "Project is empty".
+                    if(appContext.liveEditor) { // Ensure liveEditor exists
+                        appContext.liveEditor.innerHTML = `<p style="text-align:center; color: var(--text-secondary); padding: 20px;">Project "${projectName}" is empty.</p>`;
+                        appContext.liveEditor.contentEditable = 'false';
+                        appContext.liveEditor.classList.remove('is-empty');
+                        appContext.liveEditor.removeAttribute('data-placeholder');
+                    }
+                    if(appContext.currentPageDisplay) appContext.currentPageDisplay.textContent = `Project: ${projectName} - Empty`;
+                    appContext.currentPageState = null; // Explicitly clear current page state
+                    appContext.hasUnsavedChanges = false;
+                    if(appContext.updateSaveButtonState) appContext.updateSaveButtonState();
+
+                } else if (fetchedRootPageId && !appContext.loadPageContent) {
+                     console.error("selectProjectHandler: loadPageContent not available after fetching tree.");
+                     if (showStatus) showStatus("Error: Cannot load page content after fetching tree.", "error");
+                }
+            } else {
+                 console.error("selectProjectHandler: fetchPageTree not available on appContext");
+                 if (showStatus) showStatus("Error: Cannot fetch project pages.", "error");
+            }
+        }
+    }
+    appContext.selectProject = selectProjectHandler; // Expose the handler
+
+
     appContext.fetchProjects = async () => {
-        renderUserProfileArea(); // Ensure user profile is up-to-date
+        renderUserProfileArea(); // Render user profile (or clear if not logged in)
+        renderHomeButton();      // MODIFIED: Render home button (or clear if not logged in)
 
         if (!appContext.currentUser) {
             if (appContext.pageTreeContainer) appContext.pageTreeContainer.innerHTML = '<p style="padding: 0 10px; font-size: 0.9em; color: var(--text-secondary);">Please log in to see projects.</p>';
@@ -276,118 +529,83 @@ export function initSidePanel(appContext) {
 
                 if (projects.length === 0) {
                     appContext.pageTreeContainer.innerHTML = '<p style="padding: 0 10px; font-size: 0.9em; color: var(--text-secondary);">No projects. Click "+" above to create one.</p>';
-                    return;
-                }
-                 projects.forEach(projectName => {
-                    const projectLi = document.createElement('li');
-                    projectLi.classList.add('project-item');
-                    projectLi.dataset.projectName = projectName;
+                    // No return here, as fetchProjects might still need to do other things.
+                    // But for the project list itself, this is the end.
+                } else { // Only iterate if projects exist
+                     projects.forEach(projectName => {
+                        const projectLi = document.createElement('li');
+                        projectLi.classList.add('project-item');
+                        projectLi.dataset.projectName = projectName;
 
-                    const projectHeaderDiv = document.createElement('div');
-                    projectHeaderDiv.classList.add('project-header');
+                        const projectHeaderDiv = document.createElement('div');
+                        projectHeaderDiv.classList.add('project-header');
 
-                    const chevronIcon = document.createElement('i');
-                    chevronIcon.classList.add('fas', 'fa-chevron-right', 'project-expand-icon');
-                    projectHeaderDiv.appendChild(chevronIcon);
+                        const chevronIcon = document.createElement('i');
+                        chevronIcon.classList.add('fas', 'fa-chevron-right', 'project-expand-icon');
+                        projectHeaderDiv.appendChild(chevronIcon);
 
-                    const projectTypeIcon = document.createElement('i');
-                    projectTypeIcon.classList.add('fas', 'fa-book');
-                    projectHeaderDiv.appendChild(projectTypeIcon);
+                        const projectTypeIcon = document.createElement('i');
+                        projectTypeIcon.classList.add('fas', 'fa-book');
+                        projectHeaderDiv.appendChild(projectTypeIcon);
 
-                    const projectNameSpan = document.createElement('span');
-                    projectNameSpan.textContent = projectName;
-                    projectNameSpan.classList.add('project-name-text');
-                    projectHeaderDiv.appendChild(projectNameSpan);
+                        const projectNameSpan = document.createElement('span');
+                        projectNameSpan.textContent = projectName;
+                        projectNameSpan.classList.add('project-name-text');
+                        projectHeaderDiv.appendChild(projectNameSpan);
 
-                    const actionsGroup = document.createElement('div');
-                    actionsGroup.classList.add('sidebar-actions-group');
-                    const moreProjectItemActionsBtn = createActionButton('fa-ellipsis-h', 'More Project Actions', (event) => {
-                        if (appContext.openActionsModal) appContext.openActionsModal(event, 'project', projectName, projectName);
-                   });
-                    const addPageToProjectBtn = createActionButton('fa-plus', 'Add Page to Project', () => {
-                        if (appContext.createNewSubpage) appContext.createNewSubpage(projectName, null, projectName);
-                    });
-                    actionsGroup.appendChild(moreProjectItemActionsBtn);
-                    actionsGroup.appendChild(addPageToProjectBtn);
-                    projectHeaderDiv.appendChild(actionsGroup);
+                        const actionsGroup = document.createElement('div');
+                        actionsGroup.classList.add('sidebar-actions-group');
+                        const moreProjectItemActionsBtn = createActionButton('fa-ellipsis-h', 'More Project Actions', (event) => {
+                            if (appContext.openActionsModal) appContext.openActionsModal(event, 'project', projectName, projectName, projectName);
+                       });
+                        const addPageToProjectBtn = createActionButton('fa-plus', 'Add Page to Project', () => {
+                            if (appContext.createNewSubpage) appContext.createNewSubpage(projectName, null, projectName);
+                        });
+                        actionsGroup.appendChild(moreProjectItemActionsBtn);
+                        actionsGroup.appendChild(addPageToProjectBtn);
+                        projectHeaderDiv.appendChild(actionsGroup);
 
-                    projectLi.appendChild(projectHeaderDiv);
+                        projectLi.appendChild(projectHeaderDiv);
 
-                    const projectPagesDiv = document.createElement('div'); // This is the container for the UL of pages
-                    projectPagesDiv.classList.add('project-pages-container');
-                    projectPagesDiv.style.display = 'none'; // Collapsed by default
-                    projectLi.appendChild(projectPagesDiv);
+                        const projectPagesDiv = document.createElement('div'); // This is the container for the UL of pages
+                        projectPagesDiv.classList.add('project-pages-container');
+                        projectPagesDiv.style.display = 'none'; // Collapsed by default
+                        projectLi.appendChild(projectPagesDiv);
 
-                    // Project Chevron Click Listener (handles expansion/collapse)
-                    chevronIcon.addEventListener('click', async (e) => {
-                        e.stopPropagation();
-                        const isExpanded = projectLi.classList.toggle('expanded');
-                        chevronIcon.classList.toggle('fa-chevron-right', !isExpanded);
-                        chevronIcon.classList.toggle('fa-chevron-down', isExpanded);
-                        projectPagesDiv.style.display = isExpanded ? 'block' : 'none';
+                        // Project Chevron Click Listener (handles expansion/collapse)
+                        chevronIcon.addEventListener('click', async (e) => {
+                            e.stopPropagation();
+                            const isExpanded = projectLi.classList.toggle('expanded');
+                            chevronIcon.classList.toggle('fa-chevron-right', !isExpanded);
+                            chevronIcon.classList.toggle('fa-chevron-down', isExpanded);
+                            projectPagesDiv.style.display = isExpanded ? 'block' : 'none';
 
-                        if (isExpanded && projectPagesDiv.children.length === 0) { // Only fetch if not already populated
-                            // Pass null for pageIdToScrollTo, projectPagesDiv is the container
-                            await appContext.fetchPageTree(projectName, null, projectPagesDiv);
-                        }
-                    });
-
-                    // Project Header Click Listener (handles selection and loading root page)
-                    projectHeaderDiv.addEventListener('click', async (e) => {
-                        if (e.target.closest('.sidebar-action-btn') || e.target.closest('.project-expand-icon')) return;
-
-                        const isProjectAlreadyActive = appContext.currentProject === projectName;
-                        const rootPageIdFromDataset = projectLi.dataset.rootPageId;
-                        const rootPageId = (rootPageIdFromDataset && rootPageIdFromDataset !== 'null' && rootPageIdFromDataset !== 'undefined') ? rootPageIdFromDataset : null;
-                        const isCurrentlyOnThisProjectsRootPage = isProjectAlreadyActive && rootPageId && appContext.currentPageState?.id === rootPageId;
-
-                        if (isProjectAlreadyActive && isCurrentlyOnThisProjectsRootPage) {
-                            return; // Clicked active project whose root page is already loaded. Do nothing.
-                        }
-
-                        if (appContext.hasUnsavedChanges && appContext.currentPageState) {
-                            if (!confirm('You have unsaved changes. Are you sure you want to switch context? Your changes will be lost.')) {
-                                return;
+                            if (isExpanded && projectPagesDiv.children.length === 0) { // Only fetch if not already populated
+                                await appContext.fetchPageTree(projectName, null, projectPagesDiv);
                             }
-                            if (appContext.clearEditor) appContext.clearEditor(true);
-                        } else if (appContext.currentPageState && appContext.clearEditor) { // No unsaved changes, but switching page/project
-                             appContext.clearEditor(false);
-                        }
-                        
-                        setActiveSidebarItem(projectLi); // Sets currentProject and active visual state
+                        });
 
-                        // Load Root Page Content or fetch tree if root ID is unknown
-                        if (rootPageId) {
-                            if (appContext.loadPageContent) {
-                                await appContext.loadPageContent(projectName, rootPageId);
+                        // Project Header Click Listener (handles selection and loading root page)
+                        projectHeaderDiv.addEventListener('click', async (e) => {
+                            if (e.target.closest('.sidebar-action-btn') || e.target.closest('.project-expand-icon')) return;
+                            // Use the new selectProjectHandler
+                            if (appContext.selectProject) {
+                                await appContext.selectProject(projectName, projectLi);
+                            } else {
+                                console.error("Project header click: appContext.selectProject not defined.");
+                                if(showStatus) showStatus("Critical error: Cannot switch projects.", "error");
                             }
-                        } else {
-                            // RootPageId is not known, fetch the tree. fetchPageTree will set dataset.rootPageId.
-                            // It will also render the tree (collapsed) into projectPagesDiv.
-                            if (appContext.fetchPageTree) {
-                                const fetchedRootPageId = await appContext.fetchPageTree(projectName, null, projectPagesDiv);
-                                if (fetchedRootPageId && appContext.loadPageContent) {
-                                    await appContext.loadPageContent(projectName, fetchedRootPageId);
-                                } else if (!fetchedRootPageId) {
-                                    // Project is empty or error fetching tree, clear editor
-                                    console.warn(`Project ${projectName} is empty or rootPageId not found after fetchPageTree.`);
-                                    if(appContext.clearEditor) appContext.clearEditor(true);
-                                    if(appContext.currentPageDisplay) appContext.currentPageDisplay.textContent = 'Project is empty';
-                                    appContext.currentPageState = null;
-                                }
-                            }
-                        }
-                        // The project's page tree (projectPagesDiv) remains collapsed unless its chevron was clicked.
+                        });
+                        projectListUl.appendChild(projectLi);
                     });
-                    projectListUl.appendChild(projectLi);
-                });
                 appContext.pageTreeContainer.appendChild(projectListUl);
+                }
             }
         } catch (error) {
             if (error.message && !error.message.toLowerCase().startsWith('auth error')) {
                 console.error('Error fetching projects:', error);
                 if (appContext.pageTreeContainer) appContext.pageTreeContainer.innerHTML = '<p>Error loading projects.</p>';
-                showStatus('Failed to load projects.', 'error');
+                if (showStatus) showStatus('Failed to load projects.', 'error');
             } else if (error.message) {
                 console.warn(`Auth error during fetchProjects: ${error.message}`);
             }
@@ -431,7 +649,7 @@ export function initSidePanel(appContext) {
             const actionsGroup = document.createElement('div');
             actionsGroup.classList.add('sidebar-actions-group');
             const morePageActionsBtn = createActionButton('fa-ellipsis-h', 'More Page Actions', (event) => {
-                if (appContext.openActionsModal) appContext.openActionsModal(event, 'page', node.id, node.title);
+                if (appContext.openActionsModal) appContext.openActionsModal(event, 'page', node.id, node.title, currentProjectName);
             });
             const addSubpageBtn = createActionButton('fa-plus', 'Add Subpage Here', () => {
                  if (appContext.createNewSubpage) appContext.createNewSubpage(currentProjectName, node.id, node.title);
@@ -471,10 +689,11 @@ export function initSidePanel(appContext) {
 
                 if (appContext.hasUnsavedChanges && appContext.currentPageState) {
                     if (!confirm('You have unsaved changes. Are you sure you want to load a new page? Your changes will be lost.')) return;
-                    if(appContext.clearEditor) appContext.clearEditor(true);
-                } else if (appContext.currentPageState && appContext.clearEditor) {
-                    appContext.clearEditor(false);
+                    if(appContext.clearEditor) appContext.clearEditor(false); // Clear current page, then displayHomepage (will be overridden by loadPageContent)
+                } else if (appContext.currentPageState && appContext.clearEditor) { // No unsaved changes, but a page is loaded
+                    appContext.clearEditor(false); // Clear current page
                 }
+
 
                 setActiveSidebarItem(li); // Sets active visual state and appContext.currentProject
 
@@ -495,7 +714,7 @@ export function initSidePanel(appContext) {
             if (projectItemForTree) containerForTreeUl = projectItemForTree.querySelector('.project-pages-container');
             if (!containerForTreeUl) {
                 console.error("fetchPageTree: Critical - could not find container for page tree for project:", projectName);
-                showStatus(`Failed to find UI container for ${projectName}`, 'error');
+                if (showStatus) showStatus(`Failed to find UI container for ${projectName}`, 'error');
                 return null;
             }
         }
@@ -551,7 +770,7 @@ export function initSidePanel(appContext) {
             if (error.message && !error.message.toLowerCase().startsWith('auth error')) {
                 console.error(`Error fetching page tree for ${projectName}:`, error);
                 containerForTreeUl.innerHTML = `<ul><li style="padding-left:10px; color: var(--text-error); font-style:italic;">Error: ${error.message}</li></ul>`;
-                showStatus(`Failed to load tree for ${projectName}: ${error.message}`, 'error');
+                if (showStatus) showStatus(`Failed to load tree for ${projectName}: ${error.message}`, 'error');
             } else if (error.message) {
                 console.warn(`Auth error during fetchPageTree for ${projectName}: ${error.message}`);
             }
@@ -562,7 +781,7 @@ export function initSidePanel(appContext) {
     appContext.createNewProject = async () => {
         const projectNameStr = prompt("Enter new project name:");
         if (!projectNameStr || projectNameStr.trim() === "") {
-            if (projectNameStr !== null) showStatus('Project name cannot be empty.', 'warn');
+            if (projectNameStr !== null && showStatus) showStatus('Project name cannot be empty.', 'warn');
             return;
         }
         const newProjectName = projectNameStr.trim();
@@ -577,22 +796,19 @@ export function initSidePanel(appContext) {
                 throw new Error(result.error || `HTTP error! status: ${response.status}`);
             }
             
-            showStatus(`Project "${result.projectName}" created successfully!`, 'success');
+            if (showStatus) showStatus(`Project "${result.projectName}" created successfully!`, 'success');
             await appContext.fetchProjects(); // Refresh the entire project list
 
             // Find and click the new project's header to select it and load its (empty) root.
             const newProjectItem = Array.from(pageTreeContainer.querySelectorAll('.project-item'))
                 .find(item => item.dataset.projectName === result.projectName);
-            if (newProjectItem) {
-                const projectHeader = newProjectItem.querySelector('.project-header');
-                if (projectHeader) {
-                    projectHeader.click(); // This will select it, set active, and attempt to load root.
-                }
+            if (newProjectItem && appContext.selectProject) {
+                 await appContext.selectProject(result.projectName, newProjectItem);
             }
         } catch (error) {
             if (error.message && !error.message.toLowerCase().startsWith('auth error')) {
                 console.error('Error creating project:', error);
-                showStatus(`Failed to create project: ${error.message}`, 'error');
+                if (showStatus) showStatus(`Failed to create project: ${error.message}`, 'error');
             } else if (error.message) {
                 console.warn(`Auth error during createNewProject: ${error.message}`);
             }
@@ -601,26 +817,27 @@ export function initSidePanel(appContext) {
 
     appContext.createNewSubpage = async (projectName, parentPageId, parentNameForPrompt = 'this item') => {
         if (!projectName) {
-            showStatus('Cannot create subpage: No project context.', 'error');
+            if (showStatus) showStatus('Cannot create subpage: No project context.', 'error');
             return;
         }
         const promptText = parentPageId ? `Enter title for new subpage under "${parentNameForPrompt}":` : `Enter title for new page in project "${projectName}":`;
         const titleStr = prompt(promptText);
 
         if (!titleStr || titleStr.trim() === '') {
-            if (titleStr !== null) showStatus('Page title cannot be empty.', 'warn');
+            if (titleStr !== null && showStatus) showStatus('Page title cannot be empty.', 'warn');
             return;
         }
         const newPageTitle = titleStr.trim();
 
-        if (appContext.hasUnsavedChanges) {
+        if (appContext.hasUnsavedChanges && appContext.currentPageState) {
             if (!confirm('You have unsaved changes. Create new page and discard current changes?')) {
                 return;
             }
-            if(appContext.clearEditor) appContext.clearEditor(true);
-        } else if (appContext.clearEditor && appContext.currentPageState) {
-            appContext.clearEditor(false);
+            if(appContext.clearEditor) appContext.clearEditor(false); // Clear current page, then displayHomepage (will be overridden by loadPageContent)
+        } else if (appContext.currentPageState && appContext.clearEditor) { // No unsaved changes, but a page is loaded
+            appContext.clearEditor(false); // Clear current page
         }
+
 
         try {
             const response = await appContext.fetchWithAuth(`/api/project/${projectName}/pages`, {
@@ -631,7 +848,7 @@ export function initSidePanel(appContext) {
             if (!response.ok) {
                 throw new Error(result.error || `HTTP error! status: ${response.status}`);
             }
-            showStatus(`Page "${result.title}" created successfully!`, 'success');
+            if (showStatus) showStatus(`Page "${result.title}" created successfully!`, 'success');
 
             const projectItem = pageTreeContainer.querySelector(`.project-item[data-project-name="${CSS.escape(projectName)}"]`);
             let projectPagesDiv = projectItem ? projectItem.querySelector('.project-pages-container') : null;
@@ -642,10 +859,9 @@ export function initSidePanel(appContext) {
                 // After full refresh, try to find the project item again and click its header to activate
                 const refreshedProjectItem = pageTreeContainer.querySelector(`.project-item[data-project-name="${CSS.escape(projectName)}"]`);
                 if (refreshedProjectItem) {
-                    refreshedProjectItem.querySelector('.project-header')?.click(); // Activate project
+                    if (appContext.selectProject) await appContext.selectProject(projectName, refreshedProjectItem); // Activate project
                     projectPagesDiv = refreshedProjectItem.querySelector('.project-pages-container'); // Update projectPagesDiv
                 }
-                // Fall through to load content and set active page
             } else {
                  // Step 1: Ensure project is expanded. Click its chevron if not.
                 if (!projectItem.classList.contains('expanded')) {
@@ -665,20 +881,16 @@ export function initSidePanel(appContext) {
             }
             
             // Step 2: If the new page has a parent page, ensure that parent page is expanded.
-            // projectPagesDiv should be valid here if we reached this point from the 'else' block or after refresh
             if (parentPageId && projectPagesDiv) {
                 const parentPageLi = projectPagesDiv.querySelector(`li.page[data-page-id="${CSS.escape(parentPageId)}"]`);
                 if (parentPageLi && parentPageLi.classList.contains('has-children') && !parentPageLi.classList.contains('expanded')) {
                     const parentPageChevron = parentPageLi.querySelector('.page-item-header .page-expand-icon');
                     if (parentPageChevron) {
-                         // Manually trigger expansion for parent page
                         parentPageLi.classList.add('expanded');
                         parentPageChevron.classList.remove('fa-chevron-right');
                         parentPageChevron.classList.add('fa-chevron-down');
                         const childrenContainer = parentPageLi.querySelector('.page-children-container');
                         if(childrenContainer) childrenContainer.style.display = 'block';
-                        // If children weren't rendered by renderPageTreeInternal (e.g. deep nesting),
-                        // the click handler for chevron would do it. Here, we assume fetchPageTree rendered enough.
                     }
                 }
             }
@@ -686,15 +898,12 @@ export function initSidePanel(appContext) {
             // Step 3: Load the new page content and set it as active in the sidebar.
             if (appContext.loadPageContent && result.newPageId) {
                 await appContext.loadPageContent(projectName, result.newPageId);
-                const newPageLi = pageTreeContainer.querySelector(`.project-item[data-project-name="${CSS.escape(projectName)}"] li.page[data-page-id="${CSS.escape(result.newPageId)}"]`);
-                if (newPageLi) {
-                    setActiveSidebarItem(newPageLi);
-                }
+                // setActiveSidebarItem will be called by loadPageContent's UI update for active page in tree
             }
         } catch (error) {
              if (error.message && !error.message.toLowerCase().startsWith('auth error')) {
                 console.error('Error creating subpage:', error);
-                showStatus(`Failed to create subpage: ${error.message}`, 'error');
+                if (showStatus) showStatus(`Failed to create subpage: ${error.message}`, 'error');
             } else if (error.message) {
                 console.warn(`Auth error during createNewSubpage: ${error.message}`);
             }
@@ -710,21 +919,25 @@ export function initSidePanel(appContext) {
             const result = await response.json();
             if (!response.ok) throw new Error(result.error || `HTTP error! status: ${response.status}`);
             
-            showStatus(result.message, 'success');
+            if (showStatus) showStatus(result.message, 'success');
             const wasCurrentProject = appContext.currentProject === projectName;
+            
+            if (wasCurrentProject) {
+                // If current project is deleted, clear editor and go to homepage
+                if (appContext.clearEditor) appContext.clearEditor(true); // true for full clear, sets project to null
+                appContext.currentProject = null; // Ensure it's null
+                appContext.currentPageState = null;
+                // clearEditor(true) calls displayHomepage if user logged in.
+                // No need to explicitly set currentPageDisplay here.
+                const homeButton = document.getElementById('nav-home-btn');
+                if(homeButton) homeButton.click(); // Simulate click on home to clear sidebar states
+            }
             await appContext.fetchProjects(); // Refresh project list
 
-            if (wasCurrentProject) {
-                if (appContext.clearEditor) appContext.clearEditor(true);
-                appContext.currentProject = null; // Will be reset if another project is auto-selected
-                appContext.currentPageState = null;
-                if (appContext.currentPageDisplay) appContext.currentPageDisplay.textContent = 'No page selected';
-                // No specific item is made active here; user can select another project or create one.
-            }
         } catch (error) {
             if (error.message && !error.message.toLowerCase().startsWith('auth error')) {
                 console.error(`Error deleting project ${projectName}:`, error);
-                showStatus(`Failed to delete project: ${error.message}`, 'error');
+                if (showStatus) showStatus(`Failed to delete project: ${error.message}`, 'error');
             } else if (error.message) {
                  console.warn(`Auth error during deleteProject for ${projectName}: ${error.message}`);
             }
@@ -734,7 +947,7 @@ export function initSidePanel(appContext) {
     appContext.renameProject = async (currentProjectName) => {
         const newProjectNamePrompt = prompt(`Enter new name for project "${currentProjectName}":`, currentProjectName);
         if (!newProjectNamePrompt || newProjectNamePrompt.trim() === "" || newProjectNamePrompt.trim() === currentProjectName) {
-            if (newProjectNamePrompt !== null && newProjectNamePrompt.trim() !== currentProjectName) showStatus('Project name cannot be empty or unchanged.', 'warn');
+            if (newProjectNamePrompt !== null && newProjectNamePrompt.trim() !== currentProjectName && showStatus) showStatus('Project name cannot be empty or unchanged.', 'warn');
             return;
         }
         const newProjectName = newProjectNamePrompt.trim();
@@ -742,37 +955,50 @@ export function initSidePanel(appContext) {
             const response = await appContext.fetchWithAuth(`/api/project/${currentProjectName}/rename`, {
                 method: 'PUT', body: JSON.stringify({ newProjectName: newProjectName })
             });
-            const result = await response.json(); // Expects { message, newProjectName }
+            const result = await response.json(); 
             if (!response.ok) throw new Error(result.error || `HTTP error! status: ${response.status}`);
 
-            showStatus(result.message, 'success');
+            if (showStatus) showStatus(result.message, 'success');
             const wasCurrentProject = appContext.currentProject === currentProjectName;
-            const currentPageIdIfActive = appContext.currentPageState?.id;
+            const currentPageIdIfActive = wasCurrentProject ? appContext.currentPageState?.id : null;
             
             await appContext.fetchProjects(); // Re-renders project list
 
             if (wasCurrentProject) {
+                appContext.currentProject = result.newProjectName; // Update internal currentProject name
+                // Try to re-select the same project (now with new name) and page if it was active
                 const newProjectItem = Array.from(pageTreeContainer.querySelectorAll('.project-item'))
                     .find(item => item.dataset.projectName === result.newProjectName);
+
                 if (newProjectItem) {
-                    // Click header to select, set active, and load its root page
-                    // (or current page if it was part of this project)
-                    newProjectItem.querySelector('.project-header')?.click();
-                    // If a specific page was active within this project, it should ideally remain active
-                    // The projectHeader.click() loads root. If we want to restore page, more logic is needed.
-                    // For now, renaming a project and it being active will load its root.
-                    // If a page `P` under old project name was active, then after rename, project loads root.
-                    // `appContext.currentProject` is updated by `setActiveSidebarItem` in the click.
+                    setActiveSidebarItem(newProjectItem); // Visually activate project
+                    if (currentPageIdIfActive && appContext.loadPageContent) {
+                        // Expand the project if needed to show its pages (fetchPageTree does this)
+                        if (!newProjectItem.classList.contains('expanded')) {
+                             const chevronIcon = newProjectItem.querySelector('.project-expand-icon');
+                             if(chevronIcon) chevronIcon.click(); // This will also fetch tree
+                        }
+                        // Then load the previously active page
+                        await appContext.loadPageContent(result.newProjectName, currentPageIdIfActive);
+                    } else if (appContext.selectProject) { // If no specific page was active, select project (loads its root)
+                         await appContext.selectProject(result.newProjectName, newProjectItem);
+                    }
                 } else {
-                     if (appContext.clearEditor) appContext.clearEditor(true);
+                     // Should not happen if fetchProjects worked, but as a fallback:
+                     if (appContext.clearEditor) appContext.clearEditor(true); // Go to homepage
                      appContext.currentProject = null;
                      appContext.currentPageState = null;
+                }
+                 if (appContext.currentPageDisplay && appContext.currentPageState) {
+                    appContext.currentPageDisplay.textContent = `${result.newProjectName} / ${appContext.currentPageState.title}`;
+                } else if (appContext.currentPageDisplay) {
+                    appContext.currentPageDisplay.textContent = `Project: ${result.newProjectName} - No page selected`;
                 }
             }
         } catch (error) {
             if (error.message && !error.message.toLowerCase().startsWith('auth error')) {
                 console.error(`Error renaming project ${currentProjectName}:`, error);
-                showStatus(`Failed to rename project: ${error.message}`, 'error');
+                if (showStatus) showStatus(`Failed to rename project: ${error.message}`, 'error');
             } else if (error.message) {
                 console.warn(`Auth error during renameProject for ${currentProjectName}: ${error.message}`);
             }
@@ -782,7 +1008,7 @@ export function initSidePanel(appContext) {
     appContext.duplicateProject = async (projectName) => {
         const newProjectNamePrompt = prompt(`Enter name for the duplicated project (from "${projectName}"):`, `${projectName} (Copy)`);
         if (!newProjectNamePrompt || newProjectNamePrompt.trim() === "") {
-            if (newProjectNamePrompt !== null) showStatus('New project name cannot be empty.', 'warn');
+            if (newProjectNamePrompt !== null && showStatus) showStatus('New project name cannot be empty.', 'warn');
             return;
         }
         const newDuplicatedProjectName = newProjectNamePrompt.trim();
@@ -790,21 +1016,21 @@ export function initSidePanel(appContext) {
             const response = await appContext.fetchWithAuth(`/api/project/${projectName}/duplicate`, {
                 method: 'POST', body: JSON.stringify({ newProjectName: newDuplicatedProjectName })
             });
-            const result = await response.json(); // Expects { message, newProjectName }
+            const result = await response.json(); 
             if (!response.ok) throw new Error(result.error || `HTTP error! status: ${response.status}`);
             
-            showStatus(result.message, 'success');
+            if (showStatus) showStatus(result.message, 'success');
             await appContext.fetchProjects(); // Refresh project list
-            // Optionally, select the new duplicated project
-            const newProjectItem = Array.from(pageTreeContainer.querySelectorAll('.project-item'))
-                .find(item => item.dataset.projectName === result.newProjectName);
-            if (newProjectItem) {
-                // newProjectItem.querySelector('.project-header')?.click(); // Uncomment to auto-select
-            }
+            // Optional: auto-select the new project
+            // const newProjectItem = Array.from(pageTreeContainer.querySelectorAll('.project-item'))
+            //     .find(item => item.dataset.projectName === result.newProjectName);
+            // if (newProjectItem && appContext.selectProject) {
+            //    await appContext.selectProject(result.newProjectName, newProjectItem);
+            // }
         } catch (error) {
             if (error.message && !error.message.toLowerCase().startsWith('auth error')) {
                 console.error(`Error duplicating project ${projectName}:`, error);
-                showStatus(`Failed to duplicate project: ${error.message}`, 'error');
+                if (showStatus) showStatus(`Failed to duplicate project: ${error.message}`, 'error');
             } else if (error.message) {
                  console.warn(`Auth error during duplicateProject for ${projectName}: ${error.message}`);
             }
@@ -820,47 +1046,69 @@ export function initSidePanel(appContext) {
             const result = await response.json();
             if (!response.ok) throw new Error(result.error || `HTTP error! status: ${response.status}`);
             
-            showStatus(result.message, 'success');
+            if (showStatus) showStatus(result.message, 'success');
             
             let pageToMakeActiveAfterDelete = appContext.currentPageState?.id;
-            let loadRootPageForProject = false;
+            let projectToKeepActive = appContext.currentProject;
+            let loadRootPageForThisProject = false;
 
-            if (appContext.currentPageState && appContext.currentPageState.id === pageId) {
-                if (appContext.clearEditor) appContext.clearEditor(true);
-                appContext.currentPageState = null;
-                if(appContext.currentPageDisplay) appContext.currentPageDisplay.textContent = 'No page selected';
-                loadRootPageForProject = true;
-                pageToMakeActiveAfterDelete = null; // Root page will be determined and loaded
+            if (appContext.currentPageState && appContext.currentPageState.id === pageId && appContext.currentProject === projectName) {
+                // Current page is being deleted. Clear editor and plan to load root of this project.
+                if (appContext.clearEditor) appContext.clearEditor(false); // Clears current page, sets currentPageState to null
+                appContext.currentPageState = null; // ensure
+                // currentProject remains projectName for now
+                loadRootPageForThisProject = true;
+                pageToMakeActiveAfterDelete = null; 
             }
             
             const projectItem = pageTreeContainer.querySelector(`.project-item[data-project-name="${CSS.escape(projectName)}"]`);
             const projectPagesDiv = projectItem ? projectItem.querySelector('.project-pages-container') : null;
 
-            // Refresh the tree. pageToMakeActiveAfterDelete is for scrolling into view.
-            const newRootId = await appContext.fetchPageTree(projectName, pageToMakeActiveAfterDelete, projectPagesDiv);
+            // Refresh the tree for the affected project
+            const newRootId = await appContext.fetchPageTree(projectName, null, projectPagesDiv); // Don't try to scroll to deleted page
             
-            if (loadRootPageForProject) {
+            if (loadRootPageForThisProject) {
                 if (newRootId && appContext.loadPageContent) {
                     await appContext.loadPageContent(projectName, newRootId);
-                    // After loading root, set it active in sidebar
-                    const rootPageLi = projectPagesDiv?.querySelector(`li.page[data-page-id="${CSS.escape(newRootId)}"]`);
-                    if (rootPageLi) setActiveSidebarItem(rootPageLi);
-                    else if (projectItem) setActiveSidebarItem(projectItem); // Activate project if no explicit root LI
-                } else if (!newRootId) { // Project became empty
-                    showStatus('Project is now empty.', 'info');
-                     if(appContext.clearEditor) appContext.clearEditor(true);
-                     if (projectItem) setActiveSidebarItem(projectItem); // Activate the (now empty) project
+                    // setActiveSidebarItem called by loadPageContent
+                } else if (!newRootId && projectItem) { 
+                    // Project became empty
+                    if (showStatus) showStatus('Project is now empty.', 'info');
+                    if(appContext.liveEditor) {
+                        appContext.liveEditor.innerHTML = `<p style="text-align:center; color: var(--text-secondary); padding: 20px;">Project "${projectName}" is empty.</p>`;
+                        appContext.liveEditor.contentEditable = 'false';
+                    }
+                    if(appContext.currentPageDisplay) appContext.currentPageDisplay.textContent = `Project: ${projectName} - Empty`;
+                    appContext.currentPageState = null;
+                    setActiveSidebarItem(projectItem); // Keep project visually active
                 }
-            } else if (pageToMakeActiveAfterDelete && projectPagesDiv) {
-                // If a different page was active and still exists, re-ensure its LI is active
+            } else if (pageToMakeActiveAfterDelete && projectPagesDiv && projectToKeepActive === projectName) {
+                // If a different page was active in the same project, re-activate it (if it still exists)
                 const stillActiveLi = projectPagesDiv.querySelector(`li.page[data-page-id="${CSS.escape(pageToMakeActiveAfterDelete)}"]`);
-                if (stillActiveLi) setActiveSidebarItem(stillActiveLi);
+                if (stillActiveLi) {
+                    setActiveSidebarItem(stillActiveLi);
+                } else {
+                    // The previously active page might have been a child of the deleted page.
+                    // Fallback to loading root of current project.
+                    if (newRootId && appContext.loadPageContent) {
+                         await appContext.loadPageContent(projectName, newRootId);
+                    } else if (projectItem) {
+                        // Fallback if project becomes empty or root cannot be loaded.
+                        if(appContext.liveEditor) {
+                            appContext.liveEditor.innerHTML = `<p style="text-align:center; color: var(--text-secondary); padding: 20px;">Project "${projectName}" is empty.</p>`;
+                            appContext.liveEditor.contentEditable = 'false';
+                        }
+                        if(appContext.currentPageDisplay) appContext.currentPageDisplay.textContent = `Project: ${projectName} - Empty`;
+                        setActiveSidebarItem(projectItem);
+                    }
+                }
             }
+            // If active page was in a different project, it remains active.
 
         } catch (error) {
             if (error.message && !error.message.toLowerCase().startsWith('auth error')) {
                 console.error(`Error deleting page ${pageTitle}:`, error);
-                showStatus(`Failed to delete page: ${error.message}`, 'error');
+                if (showStatus) showStatus(`Failed to delete page: ${error.message}`, 'error');
             } else if (error.message) {
                  console.warn(`Auth error during deletePage for ${pageTitle}: ${error.message}`);
             }
@@ -870,7 +1118,7 @@ export function initSidePanel(appContext) {
     appContext.renamePage = async (projectName, pageId, currentTitle) => {
         const newTitlePrompt = prompt(`Enter new title for page "${currentTitle}":`, currentTitle);
         if (!newTitlePrompt || newTitlePrompt.trim() === "" || newTitlePrompt.trim() === currentTitle) {
-            if (newTitlePrompt !== null && newTitlePrompt.trim() !== currentTitle) showStatus('Page title cannot be empty or unchanged.', 'warn');
+            if (newTitlePrompt !== null && newTitlePrompt.trim() !== currentTitle && showStatus) showStatus('Page title cannot be empty or unchanged.', 'warn');
             return;
         }
         const newTitle = newTitlePrompt.trim();
@@ -878,19 +1126,21 @@ export function initSidePanel(appContext) {
             const response = await appContext.fetchWithAuth(`/api/project/${projectName}/page/${pageId}/rename`, {
                 method: 'PUT', body: JSON.stringify({ newTitle: newTitle })
             });
-            const result = await response.json(); // Expects { message, newTitle }
+            const result = await response.json(); 
             if (!response.ok) throw new Error(result.error || `HTTP error! status: ${response.status}`);
             
-            showStatus(result.message, 'success');
+            if (showStatus) showStatus(result.message, 'success');
 
             const projectItem = pageTreeContainer.querySelector(`.project-item[data-project-name="${CSS.escape(projectName)}"]`);
             const projectPagesDiv = projectItem ? projectItem.querySelector('.project-pages-container') : null;
-            await appContext.fetchPageTree(projectName, pageId, projectPagesDiv); // pageId to scroll to it
+            
+            // Refresh tree and try to scroll to/activate the renamed page
+            await appContext.fetchPageTree(projectName, pageId, projectPagesDiv); 
 
-            if (appContext.currentPageState && appContext.currentPageState.id === pageId) {
-                appContext.currentPageState.title = result.newTitle;
+            if (appContext.currentPageState && appContext.currentPageState.id === pageId && appContext.currentProject === projectName) {
+                appContext.currentPageState.title = result.newTitle; // newTitle from server
                 if(appContext.currentPageDisplay) appContext.currentPageDisplay.textContent = `${projectName} / ${result.newTitle}`;
-                // Re-set active LI as its DOM element might have changed after fetchPageTree
+                // Ensure the item is visually active (fetchPageTree might reset this if it re-renders all LIs)
                 const renamedPageLi = projectPagesDiv?.querySelector(`li.page[data-page-id="${CSS.escape(pageId)}"]`);
                 if (renamedPageLi) {
                     setActiveSidebarItem(renamedPageLi);
@@ -899,7 +1149,7 @@ export function initSidePanel(appContext) {
         } catch (error) {
             if (error.message && !error.message.toLowerCase().startsWith('auth error')) {
                 console.error(`Error renaming page ${currentTitle}:`, error);
-                showStatus(`Failed to rename page: ${error.message}`, 'error');
+                if (showStatus) showStatus(`Failed to rename page: ${error.message}`, 'error');
             } else if (error.message) {
                 console.warn(`Auth error during renamePage for ${currentTitle}: ${error.message}`);
             }
@@ -909,40 +1159,38 @@ export function initSidePanel(appContext) {
     appContext.duplicatePage = async (projectName, pageId, pageTitle) => {
         try {
             const response = await appContext.fetchWithAuth(`/api/project/${projectName}/page/${pageId}/duplicate`, { method: 'POST' });
-            const result = await response.json(); // Expects { message, newPageId (or newRootPageId) }
+            const result = await response.json(); 
             if (!response.ok) throw new Error(result.error || `HTTP error! status: ${response.status}`);
             
-            showStatus(result.message, 'success');
+            if (showStatus) showStatus(result.message, 'success');
             const newDuplicatedPageId = result.newPageId || result.newRootPageId;
 
-            if (appContext.hasUnsavedChanges) {
+            if (appContext.hasUnsavedChanges && appContext.currentPageState) {
                 if (!confirm('You have unsaved changes. Load duplicated page and discard current changes?')) {
-                     // Just refresh tree but don't load the new page or change active state
-                    const projectItem = pageTreeContainer.querySelector(`.project-item[data-project-name="${CSS.escape(projectName)}"]`);
-                    const projectPagesDiv = projectItem ? projectItem.querySelector('.project-pages-container') : null;
-                    await appContext.fetchPageTree(projectName, appContext.currentPageState?.id, projectPagesDiv);
+                    // Just refresh tree if user cancels loading the new page
+                    const projectItemForRefresh = pageTreeContainer.querySelector(`.project-item[data-project-name="${CSS.escape(projectName)}"]`);
+                    const projectPagesDivForRefresh = projectItemForRefresh ? projectItemForRefresh.querySelector('.project-pages-container') : null;
+                    await appContext.fetchPageTree(projectName, appContext.currentPageState?.id, projectPagesDivForRefresh);
                     return;
                 }
-                if(appContext.clearEditor) appContext.clearEditor(true);
-            } else if (appContext.clearEditor && appContext.currentPageState) {
+                if(appContext.clearEditor) appContext.clearEditor(false); // Clear current editor content
+            } else if (appContext.currentPageState && appContext.clearEditor) { // No unsaved, but a page is loaded
                 appContext.clearEditor(false);
             }
 
             const projectItem = pageTreeContainer.querySelector(`.project-item[data-project-name="${CSS.escape(projectName)}"]`);
             const projectPagesDiv = projectItem ? projectItem.querySelector('.project-pages-container') : null;
-            await appContext.fetchPageTree(projectName, newDuplicatedPageId, projectPagesDiv); // Scroll to new duplicated page
+            
+            // Refresh tree, then load the new duplicated page
+            await appContext.fetchPageTree(projectName, null, projectPagesDiv); // Refresh first
             
             if (appContext.loadPageContent && newDuplicatedPageId) {
-                await appContext.loadPageContent(projectName, newDuplicatedPageId);
-                const duplicatedPageLi = projectPagesDiv?.querySelector(`li.page[data-page-id="${CSS.escape(newDuplicatedPageId)}"]`);
-                if (duplicatedPageLi) {
-                    setActiveSidebarItem(duplicatedPageLi);
-                }
+                await appContext.loadPageContent(projectName, newDuplicatedPageId); // This will set it active
             }
         } catch (error) {
             if (error.message && !error.message.toLowerCase().startsWith('auth error')) {
                 console.error(`Error duplicating page ${pageTitle}:`, error);
-                showStatus(`Failed to duplicate page: ${error.message}`, 'error');
+                if (showStatus) showStatus(`Failed to duplicate page: ${error.message}`, 'error');
             } else if (error.message) {
                  console.warn(`Auth error during duplicatePage for ${pageTitle}: ${error.message}`);
             }
@@ -952,3 +1200,4 @@ export function initSidePanel(appContext) {
     // Initial render of user profile area
     renderUserProfileArea();
 }
+// --- END OF FILE sidePanel.js ---
