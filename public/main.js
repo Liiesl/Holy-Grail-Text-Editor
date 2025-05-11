@@ -371,5 +371,18 @@ document.addEventListener('DOMContentLoaded', () => {
        console.error("checkAuthStatus function not initialized. Auth will not work.");
        if (appContext.showLoginScreen) appContext.showLoginScreen(); 
    }
+
+   // Register Service Worker (Add this section)
+   if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => { // Use 'load' to register SW after page content is loaded
+            navigator.serviceWorker.register('/service-worker.js')
+                .then(registration => {
+                    console.log('Service Worker registered successfully with scope:', registration.scope);
+                })
+                .catch(error => {
+                    console.error('Service Worker registration failed:', error);
+                });
+        });
+    }
 });
 // --- END OF FILE main.js ---
