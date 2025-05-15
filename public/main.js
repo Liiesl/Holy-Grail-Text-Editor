@@ -12,6 +12,7 @@ import { initAuth } from './auth_client.js';
 import { initUserSettingsModal } from './userSettingsModal.js';
 import { initMoreOptionsModal } from './moreOptionsModal.js';
 import { initPagePeekModalSystem } from './LEDR/pagePeekModal.js';
+import { initExportModal } from './exportModal.js'; // *** IMPORT NEW MODULE ***
 
 document.addEventListener('DOMContentLoaded', () => {
    const appContext = {
@@ -33,6 +34,10 @@ document.addEventListener('DOMContentLoaded', () => {
        slashCommandInfo: null,
        isSlashCommandActive: false,
        autosaveDelay: 3000,
+
+       // Emoji Search State (NEW)
+       isEmojiSearchActive: false,
+       emojiSearchInfo: null, // { textNode, offset (of ':') }
 
        // DOM Elements
        announcementsSectionHeader: document.getElementById('announcements-section-header'),
@@ -58,6 +63,7 @@ document.addEventListener('DOMContentLoaded', () => {
        emojiListContainer: null,
        embedPageModal: null,
        embedPageTreeContainer: null,
+       exportModal: null, // *** ADDED for export modal ***
 
        // Page Peek Modal System
        activePeekModals: [],
@@ -109,8 +115,19 @@ document.addEventListener('DOMContentLoaded', () => {
        closeEmojiModal: null,
        closeMoreOptionsModal: null,
        closeEmbedPageModal: null,
+       openExportModal: null,    // *** ADDED for export modal ***
+       closeExportModal: null,   // *** ADDED for export modal ***
        removeSlashCommandTextFromEditor: null,
        closeSlashCommandModal: null,
+
+       // Emoji Modal Control Functions (NEW - to be populated by emojiModal.js)
+       filterEmojisInModal: null,
+       selectEmojiInModal: null,
+       navigateEmojiInModal: null,
+       // Slash Command Helpers for Emoji (NEW - to be populated by slashCommand.js)
+       _handleEmojiSelectedForEditor: null,
+       _removeEmojiTriggerTextAndStateFromEditor: null,
+
 
        slashCommandInstance: null,
        // Auth functions
@@ -318,6 +335,8 @@ document.addEventListener('DOMContentLoaded', () => {
         appContext.hasUnsavedChanges = false;
         appContext.currentView = 'login';
         appContext.currentAnnouncementContext = null;
+        appContext.isEmojiSearchActive = false; // Reset emoji state
+        appContext.emojiSearchInfo = null;
 
         appContext.applyTheme('dark');
         appContext.changeGlobalFont('sans-serif'); // Apply default font
@@ -389,13 +408,14 @@ document.addEventListener('DOMContentLoaded', () => {
    initAuth(appContext);
    initEditArea(appContext);
    initSidePanel(appContext);
-   appContext.slashCommandInstance = initSlashCommand(appContext);
    initTextStyleModal(appContext);
    initTableEditor(appContext);
-   initEmojiModal(appContext);
+   initEmojiModal(appContext); // Depends on appContext for modal control fns
    initMoreOptionsModal(appContext); // Depends on changeGlobalFont
    initEmbedPageModal(appContext);
    initUserSettingsModal(appContext); // Depends on applyTheme
+   initExportModal(appContext); // *** INITIALIZE NEW MODULE ***
+   appContext.slashCommandInstance = initSlashCommand(appContext);
    initHomepage(appContext);
    initPagePeekModalSystem(appContext);
    setupSidebarToggle(appContext);
@@ -410,6 +430,14 @@ document.addEventListener('DOMContentLoaded', () => {
            if (sCMDActiveInPeek) {
                unsavedInPeek = true;
            }
+           // Check for active emoji search in peek modals
+           const emojiSearchActiveInPeek = appContext.activePeekModals.some(
+               modalEditorCtx => modalEditorCtx.isEmojiSearchActive && modalEditorCtx.emojiSearchInfo && modalEditorCtx.emojiSearchInfo.textNode.textContent.substring(modalEditorCtx.emojiSearchInfo.offset).length > 0
+           );
+           if (emojiSearchActiveInPeek) {
+                unsavedInPeek = true;
+           }
+
            unsavedInPeek = unsavedInPeek || appContext.activePeekModals.some(modal => modal.hasUnsavedChanges && !modal.isMinimized && modal.contextType !== 'announcement');
        }
 
@@ -424,6 +452,11 @@ document.addEventListener('DOMContentLoaded', () => {
                mainEditorUnsaved = true;
            }
        }
+        // Check for active emoji search in main editor
+       if (appContext.isEmojiSearchActive && appContext.emojiSearchInfo && appContext.emojiSearchInfo.textNode.textContent.substring(appContext.emojiSearchInfo.offset).length > 0) {
+           mainEditorUnsaved = true;
+       }
+
 
        if (mainEditorUnsaved || unsavedInPeek) {
            event.preventDefault();
@@ -435,14 +468,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
     window.addEventListener('keydown', (event) => {
         if (event.key === 'Escape') {
-            if (appContext.isSlashCommandActive) {
-                return;
+            // Priority: Emoji search mode for active editor (main or peek)
+            let activeEditorContext = appContext; // Assume main editor
+            const topPeekModal = appContext.getTopPeekModal ? appContext.getTopPeekModal() : null;
+            if (topPeekModal && topPeekModal.domElement.style.display !== 'none' && !topPeekModal.isMinimized && topPeekModal.editorContext) {
+                activeEditorContext = topPeekModal.editorContext;
             }
-            if (appContext.activePeekModals && appContext.activePeekModals.some(m => m.isSlashCommandActive)) {
-                return;
+            if (activeEditorContext.isEmojiSearchActive) {
+                // Let slashCommand.js keydown handler for the specific editor deal with it.
+                return; 
             }
 
-            const topPeekModal = appContext.getTopPeekModal ? appContext.getTopPeekModal() : null;
+            if (appContext.isSlashCommandActive) {
+                return; // Let SCMD handle its own Escape
+            }
+            if (appContext.activePeekModals && appContext.activePeekModals.some(m => m.isSlashCommandActive)) {
+                return; // Let SCMD in peek modal handle Escape
+            }
+
+            // *** ADDED: Close export modal on Escape ***
+            if (appContext.exportModal && appContext.exportModal.style.display !== 'none' && appContext.closeExportModal) {
+                appContext.closeExportModal();
+                return; // Prioritize closing the most specific/top-level modal
+            }
+
             if (topPeekModal && topPeekModal.domElement.style.display !== 'none' && !topPeekModal.isMinimized) {
                 if (topPeekModal.close) topPeekModal.close();
                 return;
@@ -458,11 +507,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     appContext.closeEmbedPageModal();
                 }
             }
-             if (appContext.emojiModal && appContext.emojiModal.style.display !== 'none') {
-                 if (appContext.closeEmojiModal) {
-                    appContext.closeEmojiModal();
-                 }
-             }
             if (appContext.closeMoreOptionsModal) {
                 appContext.closeMoreOptionsModal();
              }

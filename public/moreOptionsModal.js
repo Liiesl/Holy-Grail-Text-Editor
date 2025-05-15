@@ -128,8 +128,13 @@ export function initMoreOptionsModal(appContext) {
                 case 'import-page':
                     appContext.showStatus('Import action clicked (not implemented)', 'info', 2000);
                     break;
-                case 'export-page':
-                    appContext.showStatus('Export action clicked (not implemented)', 'info', 2000);
+                case 'export-page': // MODIFIED
+                    if (appContext.openExportModal) {
+                        appContext.openExportModal();
+                    } else {
+                        appContext.showStatus('Export feature not available.', 'error');
+                        console.warn('openExportModal function not available on appContext.');
+                    }
                     break;
                 case 'peek-page': 
                     if (appContext.currentPageState && appContext.currentPageState.id) {
@@ -144,7 +149,7 @@ export function initMoreOptionsModal(appContext) {
                     }
                     break; 
             }
-            moreOptionsModal.style.display = 'none';
+            moreOptionsModal.style.display = 'none'; // Close more options modal after action
         }
 
         const fontButton = event.target.closest('.font-option-btn');

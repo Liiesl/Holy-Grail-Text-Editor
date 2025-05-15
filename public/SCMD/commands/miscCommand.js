@@ -1,131 +1,145 @@
-// SCMD/commands/emojiCommand.js
+// SCMD/commands/miscCommand.js
 
-export const emojiCommand = {
-    command: 'emoji',
-    short: 'emo', // Optional short command
-    icon: 'far fa-smile', // FontAwesome icon for emoji
-    iconClass: '', // No specific class needed if using standard FA
-    text: 'Emoji',
-    description: 'Insert an emoji character.',
-    category: 'misc',
+// Emoji command is now a definition that uses editorContext passed to it
+export const emojiCommand = (editorContextInstance) => { // Receives the specific editor context
+    return {
+        command: 'emoji',
+        short: ['emo', 'icon'], // Updated short commands
+        icon: 'far',
+        iconClass: 'fa-smile', // FontAwesome icon for emoji
+        text: 'Emoji',
+        description: 'Pick an emoji from a list. Type : for live search.',
+        category: 'Insert', // Changed category to 'Insert' for better grouping
 
-    canExecute(appContext) {
-        return true; // Emoji command is always available
-    },
+        canExecute: (editorCtx) => true, // editorCtx here is the one passed during canExecute check by SCMD core
+        
+        execute: async (editorCtx, options) => { // editorCtx is the one SCMD core passes for execution (same as editorContextInstance here)
+            const {
+                liveEditor,
+                openEmojiModal,
+                closeSlashCommandModal,
+                _handleEmojiSelectedForEditor, // Helper from editorCtx for when emoji is actually picked
+                removeSlashCommandTextFromEditor // SCMD's own text removal helper
+            } = editorCtx; // Use the passed editorCtx
 
-    async execute(appContext, options) {
-        const { liveEditor } = appContext;
-        const {
-            slashCmdFinalRect,
-            originalSlashCommandInfo,
-            currentSearchQuery, // This is "emoji" or "emo"
-            range: initialRange // EXPECTING THIS: The range where slash command was invoked / insertion should occur
-        } = options;
+            const {
+                slashCmdFinalRect,      // For positioning the emoji modal initially
+                originalSlashCommandInfo, // Info about the original "/emoji" trigger
+                currentSearchQuery,     // The text like "emoji" or "emo"
+                range: initialRange     // The range of the SCMD trigger text. Crucial for replacement.
+            } = options;
 
-        if (!initialRange) {
-            // This is a critical issue if the slash command system is supposed to provide it.
-            // The command's correct behavior for placement relies on initialRange.
-            console.error(
-                "emojiCommand: `initialRange` was not provided in options. " +
-                "Emoji insertion will likely be misplaced. " +
-                "This may indicate an issue with how the slash command is invoked or configured."
-            );
-            // Depending on desired strictness, you could prevent the modal from opening or show an error.
-            // For this implementation, we'll allow it to proceed but with a warning,
-            // and insertion will use a less reliable fallback for positioning.
-        }
-
-        const onEmojiSelect = (selectedEmoji) => {
-            // 1. Close the emoji modal.
-            // It's good practice to close specific modals before major DOM/selection changes.
-            appContext.closeEmojiModal();
-
-            // 2. Remove the slash command text (e.g., "/emoji") from the editor.
-            // This function should ideally handle the removal cleanly.
-            if (originalSlashCommandInfo && currentSearchQuery) {
-                appContext.removeSlashCommandTextFromEditor(originalSlashCommandInfo, currentSearchQuery);
-            } else {
-                console.warn("emojiCommand: Missing originalSlashCommandInfo or currentSearchQuery; cannot remove slash command text.");
-            }
-
-            // 3. Focus the editor and restore the selection to the intended insertion point.
-            liveEditor.focus();
-            const sel = window.getSelection();
-
-            if (!sel) {
-                console.error("emojiCommand: window.getSelection() returned null. Cannot insert emoji.");
-                // Perform necessary cleanup if we can't proceed with insertion
-                appContext.closeSlashCommandModal();
-                appContext.isSlashCommandActive = false;
-                appContext.slashCommandInfo = null;
-                return;
-            }
-
-            sel.removeAllRanges(); // Clear any current or potentially incorrect selection.
-
-            if (initialRange) {
-                // Restore selection to the range captured when the slash command was initiated.
-                // This is the key step for correct placement, mirroring embedPageCommand.
-                // Cloning the range is important as the original range object might be live or become invalid.
-                sel.addRange(initialRange.cloneRange());
-            } else {
-                // Fallback if initialRange is missing (less ideal):
-                // Attempt to position cursor at a sensible default, e.g., end of the editor content.
-                // This situation should ideally be avoided by ensuring initialRange is always passed.
-                console.warn("emojiCommand: initialRange not provided. Attempting fallback for cursor position (may be inaccurate).");
-                const fallbackRange = document.createRange();
-                
-                // Try to place at the end of the editor's content
-                if (liveEditor.lastChild) {
-                    fallbackRange.setStartAfter(liveEditor.lastChild);
-                } else {
-                    fallbackRange.setStart(liveEditor, 0);
+            if (!originalSlashCommandInfo || !initialRange) {
+                console.error("emojiCommand: Missing originalSlashCommandInfo or initialRange. Cannot transform to ':' mode.");
+                if (closeSlashCommandModal) closeSlashCommandModal();
+                // Attempt to clean up the SCMD trigger if possible, though context is lacking
+                if (originalSlashCommandInfo && currentSearchQuery && removeSlashCommandTextFromEditor) {
+                     removeSlashCommandTextFromEditor(originalSlashCommandInfo, currentSearchQuery);
                 }
-                fallbackRange.collapse(true);
-                sel.addRange(fallbackRange);
+                editorCtx.isSlashCommandActive = false;
+                editorCtx.slashCommandInfo = null;
+                return true; // Indicate normal cleanup happened or was attempted.
             }
 
-            // 4. Insert the selected emoji character using the now hopefully correct selection.
-            if (sel.rangeCount > 0) {
-                const rangeToInsert = sel.getRangeAt(0);
-                rangeToInsert.deleteContents(); // Clear the spot (e.g., if initialRange was a non-collapsed selection)
+            // 1. Transform "/emoji" text to ":"
+            const { textNode, offset: slashOffset } = originalSlashCommandInfo; // slashOffset is position *after* '/'
+            let colonPlacedSuccessfully = false;
 
-                const emojiTextNode = document.createTextNode(selectedEmoji.char);
-                rangeToInsert.insertNode(emojiTextNode);
+            if (textNode && textNode.parentNode && textNode.textContent[slashOffset - 1] === '/') {
+                const currentContent = textNode.textContent;
+                const textBeforeSlash = currentContent.substring(0, slashOffset - 1);
+                // The text after the SCMD query (e.g., "emoji")
+                const textAfterCmdQuery = currentContent.substring(slashOffset + currentSearchQuery.length);
 
-                // Move cursor to be after the inserted emoji.
-                rangeToInsert.setStartAfter(emojiTextNode);
-                rangeToInsert.collapse(true);
-                sel.removeAllRanges(); // Clean up selection state again.
-                sel.addRange(rangeToInsert); // Add the new, collapsed range for the final cursor position.
+                textNode.textContent = textBeforeSlash + ":" + textAfterCmdQuery;
+                colonPlacedSuccessfully = true;
+
+                // Update selection to be right after the new ':'
+                const sel = window.getSelection();
+                if (sel) {
+                    const newRange = document.createRange();
+                    // New offset for cursor is where '/' was, which is now where ':' is.
+                    // So, cursor goes *after* ':', which is (slashOffset - 1) + 1 = slashOffset
+                    const newCursorPositionInNode = slashOffset; 
+                    try {
+                        newRange.setStart(textNode, Math.min(newCursorPositionInNode, textNode.textContent.length));
+                        newRange.collapse(true);
+                        sel.removeAllRanges();
+                        sel.addRange(newRange);
+                        
+                        // Store info about the new colon for live emoji search
+                        editorCtx.emojiSearchInfo = { textNode, offset: newCursorPositionInNode };
+                    } catch (e) {
+                        console.error("Error setting cursor after replacing /emoji with :", e);
+                        colonPlacedSuccessfully = false; // Revert if cursor setting failed
+                        textNode.textContent = currentContent; // Restore original text
+                    }
+                } else {
+                    colonPlacedSuccessfully = false;
+                }
             } else {
-                // This state (no range in selection) should ideally not be reached if the logic above,
-                // including fallbacks, correctly establishes a range.
-                console.error("emojiCommand: No valid range available for emoji insertion even after fallbacks.");
-                // As an absolute last resort, append to the editor (though this is often the "wrong place").
-                const p = document.createElement('p');
-                p.appendChild(document.createTextNode(selectedEmoji.char));
-                liveEditor.appendChild(p);
+                console.warn("emojiCommand (from SCMD): Slash not found at expected position or invalid textNode.");
             }
 
-            // 5. Close the main slash command modal itself.
-            appContext.closeSlashCommandModal();
+            if (!colonPlacedSuccessfully) {
+                console.error("emojiCommand: Failed to transform /emoji to ':' and set up emoji search mode.");
+                if (closeSlashCommandModal) closeSlashCommandModal();
+                if (removeSlashCommandTextFromEditor) { // Clean up the original /emoji
+                     removeSlashCommandTextFromEditor(originalSlashCommandInfo, currentSearchQuery);
+                }
+                editorCtx.isSlashCommandActive = false;
+                editorCtx.slashCommandInfo = null;
+                return true; // Standard SCMD cleanup needed.
+            }
 
-            // 6. Reset slash command state variables in appContext.
-            appContext.isSlashCommandActive = false;
-            appContext.slashCommandInfo = null;
-            // The local `searchQuery` in slashCommand.js will be reset naturally on next activation.
+            // 2. Activate emoji search mode on the editorContext
+            editorCtx.isEmojiSearchActive = true;
+            
+            // 3. Close the SCMD modal (as we are transitioning to emoji modal)
+            //    and reset SCMD active state for this editor.
+            if (closeSlashCommandModal) closeSlashCommandModal();
+            editorCtx.isSlashCommandActive = false; 
+            editorCtx.slashCommandInfo = null;
+            // The SCMD core's searchQuery (local to SCMD instance) will be reset on next trigger.
 
-            // 7. Dispatch an input event for the editor to recognize the change (e.g., for autosave, undo stack).
-            liveEditor.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
-        };
+            // 4. Open the emoji modal for live search
+            // The anchorRect can be the SCMD modal's last position or calculated from the new colon
+            const anchorRect = slashCmdFinalRect || (() => {
+                if (editorCtx.emojiSearchInfo) {
+                    const range = document.createRange();
+                    range.setStart(editorCtx.emojiSearchInfo.textNode, editorCtx.emojiSearchInfo.offset);
+                    range.collapse(true);
+                    const rects = range.getClientRects();
+                    return rects.length > 0 ? rects[0] : null;
+                }
+                return null;
+            })() || liveEditor.getBoundingClientRect(); // Fallback
 
-        // Open the emoji modal, passing the selection callback and positioning rectangle.
-        appContext.openEmojiModal(onEmojiSelect, slashCmdFinalRect, '');
-
-        // Return false to indicate that this command handles its own UI lifecycle
-        // (closing modals, removing text, resetting state) and the main slash command
-        // system should not perform its default cleanup.
-        return false;
-    }
+            // The `currentSearchQuery` from SCMD (e.g., "emoji") is NOT passed as initial filter here,
+            // because live filtering will now use the text typed *after* the ":" in the editor.
+            if (openEmojiModal && _handleEmojiSelectedForEditor) {
+                openEmojiModal(
+                    (selectedEmoji) => _handleEmojiSelectedForEditor(selectedEmoji.char), 
+                    anchorRect, 
+                    '' // Initial emoji modal query is empty; filtering is live from editor
+                );
+            } else {
+                console.error("emojiCommand: Emoji modal functions (openEmojiModal or _handleEmojiSelectedForEditor) not available on editorContext.");
+                // If modal can't open, try to revert the ':' to avoid leaving editor in a weird state.
+                // This is a bit complex, might be better to just log error and leave ':'
+                if (editorCtx.emojiSearchInfo) {
+                    const { textNode: tn, offset: colonOffset } = editorCtx.emojiSearchInfo;
+                    tn.textContent = tn.textContent.substring(0, colonOffset - 1) + "/" + currentSearchQuery + tn.textContent.substring(colonOffset);
+                }
+                editorCtx.isEmojiSearchActive = false;
+                editorCtx.emojiSearchInfo = null;
+                liveEditor.focus();
+                return true; // SCMD cleanup needed
+            }
+            
+            // Return false to indicate SCMD core should not do its default SCMD text removal etc.
+            // We've handled the transformation and transition to emoji search mode.
+            return false; 
+        }
+    };
 };

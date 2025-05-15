@@ -1,0 +1,160 @@
+/* Example CSS for modals - adapt to your existing styles */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6); /* Consider var(--bg-overlay) if defined and suitable */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000; /* Ensure it's above other content, matches existing style.css use for sidebar */
+}
+
+.modal-content {
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+    padding: 20px;
+    border-radius: var(--border-radius-md); /* Using var from style.css */
+    box-shadow: var(--medium-shadow); /* Using var from style.css */
+    width: 90%;
+    max-width: 500px;
+    /* Height will be auto, determined by content. No internal scrollbars by default. */
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color-primary); /* Using var from style.css */
+    padding-bottom: 10px;
+    margin-bottom: 15px;
+}
+
+.modal-header h3 {
+    margin: 0;
+    font-size: 1.2em;
+}
+
+.modal-header .close-btn {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: var(--text-secondary);
+}
+.modal-header .close-btn:hover {
+    color: var(--text-primary);
+}
+
+
+.modal-body .form-group {
+    margin-bottom: 15px;
+    /* --- MODIFIED FOR INLINE LABEL AND SELECT --- */
+    display: flex;
+    align-items: center;
+    gap: 10px; /* Provides spacing between label and select */
+}
+
+.modal-body .form-group label {
+    /* display: block; */ /* Original: display: block; Now a flex item. */
+    margin-bottom: 0;    /* Original: margin-bottom: 8px; Adjusted for inline alignment. */
+    font-weight: bold;
+    /* --- ADDED for consistent layout --- */
+    width: 100px;        /* Fixed width for labels. Adjust if needed (e.g., "Content:" is longest default). */
+    flex-shrink: 0;      /* Prevent label from shrinking. */
+}
+
+/* Styles for select dropdowns */
+.modal-body select.modal-select {
+    /* width: 100%; */ /* Original: width: 100%; Replaced by flex sizing. */
+    flex-grow: 1;       /* Select takes remaining available space in the flex container. */
+    /* min-width: 0; */ /* Consider adding if select content overflows (rare for selects) */
+
+    padding: 10px 12px; /* Adjusted padding for a more modern feel */
+    background-color: var(--bg-input);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color-primary);
+    border-radius: var(--border-radius-small);
+    font-size: 0.95em; /* Slightly larger for better readability */
+    font-family: inherit; /* Inherits from body which uses --global-font-family */
+    box-sizing: border-box;
+    /* Allows theme-aware default browser arrow, remove appearance lines for custom arrow */
+    /* appearance: none; 
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url(...); for custom arrow */
+}
+
+.modal-body select.modal-select:disabled {
+    background-color: var(--bg-tertiary);
+    color: var(--text-disabled, var(--text-secondary)); /* Fallback if --text-disabled is not defined */
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+.modal-body select.modal-select:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 0 2px var(--accent-primary-faded); /* Consistent focus ring */
+}
+
+/* Styling for options within the select dropdown */
+.modal-body select.modal-select option {
+    background-color: var(--bg-secondary); /* Or --bg-primary for dropdown itself */
+    color: var(--text-primary);
+}
+
+.modal-body select.modal-select option:disabled {
+    color: var(--text-disabled, var(--text-secondary)); /* Fallback if --text-disabled is not defined */
+    /* Note: background-color styling on option:disabled is not consistently supported */
+}
+
+
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding-top: 15px;
+    border-top: 1px solid var(--border-color-primary); /* Using var from style.css */
+    margin-top: 20px;
+}
+
+/* Basic button styling (adapt to your existing .btn styles) */
+/* These .btn styles are assumed to be similar or overridden by global .btn styles */
+.btn {
+    padding: 8px 15px;
+    border-radius: var(--border-radius-small); /* Using var from style.css */
+    cursor: pointer;
+    border: 1px solid transparent;
+    font-size: 0.9em;
+    font-weight: 500; /* Added for consistency with save button */
+    transition: background-color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease; /* Added transitions */
+}
+.btn-primary {
+    background-color: var(--accent-primary);
+    color: white; /* Explicitly white, or var(--text-inverted) if defined for this purpose */
+    border-color: var(--accent-primary);
+}
+.btn-primary:hover {
+    background-color: var(--accent-primary-hover); /* Using var from style.css */
+    opacity: 1; /* Assuming hover means full opacity or slight change handled by color */
+}
+.btn-secondary {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color-primary); /* Using var from style.css */
+}
+.btn-secondary:hover {
+    background-color: var(--bg-input); /* A common hover for secondary buttons */
+    /* Consider defining --bg-hover-color if not already present */
+    /* opacity: 0.9; */
+}
+
+/* Remove old radio button specific styles */
+/* .modal-body .radio-group, 
+   .modal-body .radio-group label, 
+   .modal-body .radio-group input[type="radio"], 
+   .modal-body .radio-group label input[disabled] + span 
+   are no longer needed. */

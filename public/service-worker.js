@@ -1,4 +1,4 @@
-const CACHE_NAME = 'holy-grail-editor-v2.5.42'; // Increment version to force update/re-cache
+const CACHE_NAME = 'holy-grail-editor-v2.5.52'; // Increment version to force update/re-cache
 const STATIC_ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -31,7 +31,8 @@ const STATIC_ASSETS_TO_CACHE = [
   '/LEDR/pagePeekModal.js',
   '/manifest.json', // Cache the manifest
   '/icons/icon-192x192.png',
-  '/icons/icon-512x512.png'
+  '/icons/icon-512x512.png',
+  '/SCMD/emoji-data.json'
   // Note: External CDN resources (cdnjs.cloudflare.com) are not cached by default here.
   // If full offline for these is needed, consider downloading or adding them to cache.
 ];
