@@ -307,8 +307,8 @@ export function initSidePanel(appContext) {
         homeButton.appendChild(homeIcon);
         homeButton.appendChild(document.createTextNode(' Home'));
 
-        homeButton.addEventListener('click', () => {
-            const isAlreadyHome = appContext.currentView === 'home' && 
+        homeButton.addEventListener('click', async () => { // Make handler async
+            const isAlreadyHome = appContext.currentView === 'home' &&
                                   !(appContext.currentProject || appContext.currentPageState || appContext.currentAnnouncementContext);
             if (isAlreadyHome) {
                 if(appContext.showStatus) appContext.showStatus("Already on the Homepage.", "info", 1500);
@@ -316,26 +316,40 @@ export function initSidePanel(appContext) {
             }
             if (appContext.hasUnsavedChanges && appContext.currentPageState && appContext.currentPageState.type !== 'announcement') {
                 if (!confirm('You have unsaved changes. Are you sure you want to navigate to the homepage? Your current work will be lost.')) return;
+                 // No need to manually set appContext.hasUnsavedChanges = false here,
+                 // clearEditor(true) should handle related states including this flag.
             }
-            
-            if (appContext.clearEditor) appContext.clearEditor(true); // Clears editor, sets homepage content, clears contexts
-            else if (appContext.displayHomepage) appContext.displayHomepage(); // Fallback
-            
+
+            // First, clear the editor pane and its specific states.
+            if (appContext.clearEditor) {
+                appContext.clearEditor(true); // true for full clear, including unsaved changes flag
+            }
+
+            // After clearing the editor, explicitly display the homepage content.
+            // This call now also handles fetching project data.
+            if (appContext.displayHomepage) {
+               await appContext.displayHomepage(); // await this as it fetches projects
+            } else {
+                console.warn("appContext.displayHomepage function is not available. Homepage might not be displayed.");
+            }
+
+            // Update app state AFTER potentially asynchronous homepage display
             appContext.currentProject = null;
-            appContext.currentAnnouncementContext = null; 
-            appContext.currentPageState = null;
+            appContext.currentAnnouncementContext = null;
+            appContext.currentPageState = null; // Redundant if clearEditor(true) does it, but safe
             appContext.currentView = 'home';
-            appContext.hasUnsavedChanges = false;
-            if (appContext.updateSaveButtonState) appContext.updateSaveButtonState();
+            appContext.hasUnsavedChanges = false; // Redundant if clearEditor(true) does it, but safe
+            if (appContext.updateSaveButtonState) appContext.updateSaveButtonState(); // Should reflect cleared state
             if (appContext.autosaveTimeoutId) {
                 clearTimeout(appContext.autosaveTimeoutId);
                 appContext.autosaveTimeoutId = null;
             }
             if(appContext.clearSidebarActiveStates) appContext.clearSidebarActiveStates();
-            
-            // When going home, collapse any expanded project/announcement items for a cleaner sidebar state
+
+            // Collapse sidebar items (keep this)
             document.querySelectorAll('.sidebar .project-item.expanded, .sidebar .announcement-list-item.expanded').forEach(item => {
-                item.classList.remove('expanded');
+                // ... (collapsing logic) ...
+                 item.classList.remove('expanded');
                 const pagesContainer = item.querySelector('.project-pages-container, .announcement-pages-container');
                 if (pagesContainer) pagesContainer.style.display = 'none';
                 const chevron = item.querySelector('.project-expand-icon, .announcement-expand-icon');
@@ -344,9 +358,12 @@ export function initSidePanel(appContext) {
                     chevron.classList.add('fa-chevron-right');
                 }
             });
-            
-            if (appContext.fetchAnnouncementsList) appContext.fetchAnnouncementsList(); 
-            if (appContext.fetchProjects) appContext.fetchProjects();  
+
+            // Refresh announcements (keep this)
+            if (appContext.fetchAnnouncementsList) appContext.fetchAnnouncementsList();
+
+            // REMOVE the redundant fetchProjects call here
+            // if (appContext.fetchProjects) appContext.fetchProjects();
         });
         homeButtonContainer.appendChild(homeButton);
 

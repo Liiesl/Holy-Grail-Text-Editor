@@ -1,41 +1,86 @@
 // moreOptionsModal.js
 
+function createMoreOptionsModalHTML() {
+    return `
+        <ul id="more-options-list">
+            <li class="more-options-item font-selection-container">
+                <button class="font-option-btn" data-font="sans-serif" title="Sans Serif Font">Aa</button>
+                <button class="font-option-btn" data-font="serif" title="Serif Font">Aa</button>
+                <button class="font-option-btn" data-font="monospace" title="Monospace Font">Aa</button>
+            </li>
+            <li class="more-options-item" data-action="toggle-full-width">
+                <span class="more-options-label">Full Width</span>
+                <i class="fas fa-arrows-alt-h editor-option-icon-right"></i>
+            </li>
+            <li class="more-options-item" data-action="import-page">
+                <i class="fas fa-file-import"></i>
+                <span class="more-options-label">Import</span>
+            </li>
+            <li class="more-options-item" data-action="export-page">
+                <i class="fas fa-file-export"></i>
+                <span class="more-options-label">Export</span>
+            </li>
+            <li class="more-options-item" data-action="peek-page">
+                <i class="fas fa-clone"></i>
+                <span class="more-options-label">Peek Page</span>
+            </li>
+        </ul>
+    `;
+}
+
 export function initMoreOptionsModal(appContext) {
     const moreOptionsBtn = document.getElementById('more-options-btn');
-    const moreOptionsModal = document.getElementById('more-options-modal');
 
-    if (!moreOptionsBtn || !moreOptionsModal) {
-        console.warn('More Options button or modal not found. Feature will not be available.');
+    if (!moreOptionsBtn) {
+        console.warn('More Options button not found. Feature will not be available.');
         return;
     }
 
-    appContext.moreOptionsModal = moreOptionsModal; // Make modal accessible globally
+    let moreOptionsModal = document.getElementById('more-options-modal');
+    if (!moreOptionsModal) {
+        moreOptionsModal = document.createElement('div');
+        moreOptionsModal.id = 'more-options-modal';
+        moreOptionsModal.className = 'more-options-modal';
+        moreOptionsModal.style.display = 'none';
+        moreOptionsModal.innerHTML = createMoreOptionsModalHTML();
+        document.body.appendChild(moreOptionsModal);
+    }
+
+    appContext.moreOptionsModal = moreOptionsModal;
+
+    const setActiveFontButton = () => {
+        const currentFont = appContext.userSettings.fontFamily || 'sans-serif';
+        const fontButtons = moreOptionsModal.querySelectorAll('.font-option-btn');
+        fontButtons.forEach(btn => {
+            if (btn.dataset.font === currentFont) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+    };
 
     const toggleModal = (event) => {
-        event.stopPropagation(); // Prevent click from immediately closing via document listener
+        event.stopPropagation();
         const isVisible = moreOptionsModal.style.display === 'block';
         if (isVisible) {
             moreOptionsModal.style.display = 'none';
         } else {
             moreOptionsModal.style.display = 'block';
             positionModal();
+            setActiveFontButton(); // Set active font when modal opens
         }
     };
 
     const positionModal = () => {
-        if (moreOptionsModal.style.display !== 'block') return; // Only position if visible
+        if (moreOptionsModal.style.display !== 'block') return;
 
         const btnRect = moreOptionsBtn.getBoundingClientRect();
-        moreOptionsModal.style.top = btnRect.bottom + 5 + 'px'; // 5px gap below button
+        moreOptionsModal.style.top = btnRect.bottom + 5 + 'px';
         
-        // Align right edge of modal with right edge of button
         let newLeft = btnRect.right - moreOptionsModal.offsetWidth;
         
-        // Ensure modal doesn't go off-screen to the left
-        if (newLeft < 5) {
-            newLeft = 5;
-        }
-        // Ensure modal doesn't go off-screen to the right (less likely, but good check)
+        if (newLeft < 5) newLeft = 5;
         if (newLeft + moreOptionsModal.offsetWidth > window.innerWidth - 5) {
             newLeft = window.innerWidth - 5 - moreOptionsModal.offsetWidth;
         }
@@ -44,24 +89,20 @@ export function initMoreOptionsModal(appContext) {
 
     moreOptionsBtn.addEventListener('click', toggleModal);
 
-    // Close modal if clicked outside
     document.addEventListener('click', (event) => {
         if (moreOptionsModal.style.display === 'block' && 
             !moreOptionsModal.contains(event.target) && 
-            event.target !== moreOptionsBtn && !moreOptionsBtn.contains(event.target) ) { // check if click was on button or its children
+            event.target !== moreOptionsBtn && !moreOptionsBtn.contains(event.target)) {
             moreOptionsModal.style.display = 'none';
         }
     });
 
-    // Reposition (or close) modal on window resize
     window.addEventListener('resize', () => {
         if (moreOptionsModal.style.display === 'block') {
-            positionModal(); 
-            // Alternatively, to close: moreOptionsModal.style.display = 'none';
+            positionModal();
         }
     });
 
-    // Handle clicks on modal items (placeholders for now)
     moreOptionsModal.addEventListener('click', (event) => {
         const item = event.target.closest('.more-options-item[data-action]');
         if (item) {
@@ -70,12 +111,12 @@ export function initMoreOptionsModal(appContext) {
             
             switch (action) {
                 case 'toggle-full-width':
+                    // ... (keep existing logic) ...
                     const icon = item.querySelector('.editor-option-icon-right');
                     if (icon) {
-                        // This is a very basic toggle, real implementation would change app state
                         if (icon.classList.contains('fa-arrows-alt-h')) {
                              icon.classList.remove('fa-arrows-alt-h');
-                             icon.classList.add('fa-compress-arrows-alt'); // Example alternative
+                             icon.classList.add('fa-compress-arrows-alt');
                              appContext.showStatus('Full width ON (placeholder)', 'info', 1500);
                         } else {
                              icon.classList.remove('fa-compress-arrows-alt');
@@ -90,11 +131,9 @@ export function initMoreOptionsModal(appContext) {
                 case 'export-page':
                     appContext.showStatus('Export action clicked (not implemented)', 'info', 2000);
                     break;
-                case 'peek-page': // ADDED
+                case 'peek-page': 
                     if (appContext.currentPageState && appContext.currentPageState.id) {
                         if (appContext.openPageInPeekMode) {
-                            // Peeking the *current* page from "More Options" is generally okay,
-                            // as peek view is a separate, non-editing view.
                             appContext.openPageInPeekMode(appContext.currentPageState.id, appContext.currentProject);
                         } else {
                             console.warn('openPageInPeekMode function not available on appContext.');
@@ -103,26 +142,31 @@ export function initMoreOptionsModal(appContext) {
                     } else {
                         appContext.showStatus('No page selected to peek.', 'info');
                     }
-                    break; // ADDED
+                    break; 
             }
-            moreOptionsModal.style.display = 'none'; // Close modal after action
+            moreOptionsModal.style.display = 'none';
         }
 
-        const fontPlaceholder = event.target.closest('.font-placeholder-btn');
-        if (fontPlaceholder) {
-            console.log('Font placeholder clicked:', fontPlaceholder.textContent);
-            const allFontPlaceholders = moreOptionsModal.querySelectorAll('.font-placeholder-btn');
-            allFontPlaceholders.forEach(btn => btn.classList.remove('active'));
-            fontPlaceholder.classList.add('active');
-            appContext.showStatus(`Font style "${fontPlaceholder.textContent}" selected (placeholder)`, 'info', 1500);
-            // Optional: moreOptionsModal.style.display = 'none'; // Close modal after font selection
+        const fontButton = event.target.closest('.font-option-btn');
+        if (fontButton) {
+            const selectedFont = fontButton.dataset.font;
+            if (appContext.changeGlobalFont) {
+                appContext.changeGlobalFont(selectedFont); // This will also update .active class via listener in changeGlobalFont
+            }
+            appContext.showStatus(`Font changed to ${selectedFont.charAt(0).toUpperCase() + selectedFont.slice(1)}`, 'info', 1500);
+            // Optionally: moreOptionsModal.style.display = 'none'; // Keep modal open after font selection
         }
     });
 
-    // Add close function to appContext for global Escape key handler
     appContext.closeMoreOptionsModal = () => {
         if (moreOptionsModal.style.display === 'block') {
             moreOptionsModal.style.display = 'none';
         }
     };
+
+    // Initial active font button state (in case modal is pre-rendered and app context is ready)
+    // This is mainly for safety, setActiveFontButton on open is more reliable.
+    if (appContext.userSettings && appContext.userSettings.fontFamily) {
+        setActiveFontButton();
+    }
 }

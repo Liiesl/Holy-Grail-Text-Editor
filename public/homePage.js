@@ -1,52 +1,48 @@
 // homePage.js
 export function initHomepage(appContext) {
     appContext.displayHomepage = async () => {
-        // Ensure main editor is cleared of any page content and non-editable for homepage
+        // ... (ensure main editor is cleared) ...
         appContext.liveEditor.innerHTML = '';
         appContext.liveEditor.contentEditable = 'false';
-        appContext.liveEditor.classList.remove('is-empty'); // Remove editor placeholder appearance
+        appContext.liveEditor.classList.remove('is-empty');
         appContext.liveEditor.removeAttribute('data-placeholder');
 
         const homepageContainer = document.createElement('div');
         homepageContainer.id = 'homepage-content';
-        
-        let projects = []; // Initialize with an empty array
+
+        let projectsData = null; // Initialize project data
+        let projects = [];      // Initialize project name array
 
         if (appContext.currentUser) {
             if (appContext.fetchProjects) {
                 console.log("Homepage: Attempting to refresh project list by calling appContext.fetchProjects().");
                 try {
-                    // Always call fetchProjects to ensure the sidebar DOM is up-to-date before scraping.
-                    // This will update appContext.projectsContentArea (which is the element with id="pageTreeContainer").
-                    await appContext.fetchProjects(); 
-                    
-                    // Now, scrape the (presumably) updated projectsContentArea.
-                    if (appContext.projectsContentArea) { // Corrected from pageTreeContainer to projectsContentArea
-                        const projectItems = appContext.projectsContentArea.querySelectorAll('.project-item[data-project-name]');
-                        projectItems.forEach(item => {
-                            if (item.dataset.projectName) {
-                                projects.push(item.dataset.projectName);
-                            }
-                        });
+                    // Call fetchProjects to get data AND update sidebar DOM
+                    projectsData = await appContext.fetchProjects();
 
-                        if (projects.length > 0) {
-                            console.log("Homepage: Found projects by scraping sidebar DOM after explicit fetchProjects() call.", projects);
-                        } else {
-                            console.warn("Homepage: No projects found after explicit fetchProjects() call and scraping. User might have no projects, or fetchProjects failed to update DOM correctly.");
-                        }
+                    if (projectsData && Array.isArray(projectsData)) {
+                         // Extract project names from the returned data
+                        projects = projectsData.map(proj => typeof proj === 'string' ? proj : proj.name);
+                        console.log("Homepage: Using project data returned by fetchProjects().", projects);
+                    } else if (projectsData === null) {
+                        // Handle cases where fetchProjects returned null (error or no user)
+                        console.warn("Homepage: fetchProjects returned null. Assuming no projects or error occurred.");
+                        projects = [];
                     } else {
-                        console.warn("Homepage: appContext.projectsContentArea not available for scraping after attempting fetchProjects().");
+                         console.warn("Homepage: fetchProjects returned unexpected data type.", projectsData);
+                         projects = [];
                     }
+
                 } catch (error) {
                     console.error("Error calling appContext.fetchProjects() for homepage:", error);
                     appContext.showStatus('Failed to load project data for homepage.', 'error', 3000);
-                    // projects array remains empty in case of error
+                    projects = []; // Ensure projects is empty on error
                 }
             } else {
                 console.warn("Homepage: appContext.fetchProjects is not available. Cannot load project list.");
-                // projects array remains empty
+                projects = []; // Ensure projects is empty if function is missing
             }
-            
+
         } else { // No appContext.currentUser
              homepageContainer.innerHTML = `<h2>Welcome!</h2><p class="no-projects">Please log in to see your projects.</p>`;
              appContext.liveEditor.appendChild(homepageContainer);
@@ -54,10 +50,16 @@ export function initHomepage(appContext) {
              return;
         }
 
+        // --- Rendering logic using the 'projects' array (no changes needed here) ---
         let contentHtml = '<h2>Your Projects</h2>';
         if (projects && projects.length > 0) {
             contentHtml += '<ul class="project-list">';
             projects.forEach(projectName => {
+                // Ensure projectName is valid before creating HTML
+                if (typeof projectName !== 'string' || projectName.trim() === '') {
+                    console.warn("Homepage: Skipping invalid project name during rendering:", projectName);
+                    return; // Skip this iteration
+                }
                 const escapedProjectName = CSS.escape(projectName);
                 contentHtml += `
                     <li class="project-list-item">
@@ -73,15 +75,20 @@ export function initHomepage(appContext) {
             });
             contentHtml += '</ul>';
         } else {
-            contentHtml += '<p class="no-projects">No projects found. You can create a new one from the sidebar.</p>';
+            // Display message if projects array is empty (could be due to error, no projects, or not logged in)
+            if (appContext.currentUser) {
+                 contentHtml += '<p class="no-projects">No projects found. You can create a new one from the sidebar.</p>';
+            } else {
+                 contentHtml += '<p class="no-projects">Please log in to see your projects.</p>'; // Should be caught earlier, but safe fallback
+            }
         }
         homepageContainer.innerHTML = contentHtml;
         appContext.liveEditor.appendChild(homepageContainer);
 
         if(appContext.currentPageDisplay) appContext.currentPageDisplay.textContent = 'Homepage';
-        if(appContext.savePageBtn) appContext.savePageBtn.disabled = true; // No saving on homepage
+        if(appContext.savePageBtn) appContext.savePageBtn.disabled = true;
 
-        // Add event listeners for project links
+        // --- Event listeners (no changes needed here) ---
         homepageContainer.querySelectorAll('.project-link').forEach(link => {
             link.addEventListener('click', async (e) => {
                 e.preventDefault();
@@ -90,8 +97,8 @@ export function initHomepage(appContext) {
 
                 const projectName = projectLinkElement.dataset.projectName;
 
-                if (appContext.currentProject === projectName && appContext.currentPageState) {
-                    // Use projectsContentArea here as well for consistency and correctness
+                // ... (rest of the click handler remains the same) ...
+                 if (appContext.currentProject === projectName && appContext.currentPageState) {
                     const projectItem = appContext.projectsContentArea?.querySelector(`.project-item[data-project-name="${CSS.escape(projectName)}"]`);
                     const rootPageId = projectItem ? projectItem.dataset.rootPageId : null;
                     if (rootPageId && appContext.currentPageState.id === rootPageId) {
@@ -101,14 +108,14 @@ export function initHomepage(appContext) {
                 }
 
                 appContext.showStatus(`Loading project ${projectName}...`, 'info', 0);
-                
+
                 if (appContext.selectProject) {
-                    // Use projectsContentArea here as well for consistency and correctness
                     const projectItemInSidebar = appContext.projectsContentArea?.querySelector(`.project-item[data-project-name="${CSS.escape(projectName)}"]`);
-                    
+
                     if (!projectItemInSidebar) {
                         console.error(`Homepage: Could not find project item for "${projectName}" in sidebar to select.`);
                         appContext.showStatus(`Could not switch to project "${projectName}". Sidebar item not found.`, 'error');
+                         // Attempt to re-render homepage if we failed to navigate away
                         if (appContext.displayHomepage && !appContext.currentProject && !appContext.currentPageState) {
                              await appContext.displayHomepage();
                         }
@@ -119,8 +126,9 @@ export function initHomepage(appContext) {
                     } catch (error) {
                         console.error(`Error selecting project ${projectName} from homepage:`, error);
                         appContext.showStatus(`Error loading project ${projectName}. ${error.message}`, 'error');
+                        // Attempt to re-render homepage if we failed to navigate away
                         if (appContext.displayHomepage && !appContext.currentProject && !appContext.currentPageState) {
-                           await appContext.displayHomepage(); 
+                           await appContext.displayHomepage();
                         }
                     }
                 } else {
@@ -131,6 +139,7 @@ export function initHomepage(appContext) {
         });
     };
 
+    // ... (clearHomepage remains the same) ...
     appContext.clearHomepage = () => {
         const homepageContent = appContext.liveEditor.querySelector('#homepage-content');
         if (homepageContent) {

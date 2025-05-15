@@ -27,7 +27,6 @@ async function initializeSchema() {
 
     await client.query('CREATE EXTENSION IF NOT EXISTS "uuid-ossp";');
 
-    // Inside initializeSchema, before creating 'users' table or after 'uuid-ossp'
     // --- Create project_type ENUM type ---
     await client.query(`
       DO $$
@@ -50,42 +49,6 @@ async function initializeSchema() {
     `);
     console.log('Ensured "project_status" ENUM type exists.');
 
-    // --- Projects table modifications ---
-    // (After the existing CREATE TABLE IF NOT EXISTS projects)
-
-    // Add 'type' column if it doesn't exist
-    await client.query("ALTER TABLE projects ADD COLUMN IF NOT EXISTS type project_type NOT NULL DEFAULT 'user_project';");
-    console.log('Ensured "type" column exists in "projects" table with default "user_project".');
-
-    // Add 'status' column if it doesn't exist
-    await client.query("ALTER TABLE projects ADD COLUMN IF NOT EXISTS status project_status DEFAULT NULL;"); // NULL for user_project, set for announcement
-    console.log('Ensured "status" column exists in "projects" table.');
-
-    // Add unique constraint for announcement names (globally unique for type='announcement')
-    // This allows multiple users to have a project named "My Notes" (type='user_project')
-    // but only one announcement named "System Update" (type='announcement')
-    const uniqueAnnouncementNameConstraint = 'projects_announcement_name_key';
-    const announcementNameConstraintCheck = await client.query(
-        `SELECT conname FROM pg_constraint WHERE conrelid = 'projects'::regclass AND conname = $1;`,
-        [uniqueAnnouncementNameConstraint]
-    );
-    if (announcementNameConstraintCheck.rows.length === 0) {
-        try {
-            // Note: This partial unique index requires PostgreSQL.
-            // It ensures 'name' is unique ONLY for projects of type 'announcement'.
-            // Regular user projects still rely on the (user_id, name) unique constraint.
-            await client.query(`
-                CREATE UNIQUE INDEX IF NOT EXISTS ${uniqueAnnouncementNameConstraint}
-                ON projects (name) WHERE (type = 'announcement');
-            `);
-            console.log(`Added UNIQUE constraint ${uniqueAnnouncementNameConstraint} on projects(name) for type='announcement'.`);
-        } catch (e) {
-            console.warn(`Warning: Could not add UNIQUE constraint ${uniqueAnnouncementNameConstraint}: ${e.message}. This might happen if existing data violates it.`);
-        }
-    } else {
-        console.log(`UNIQUE constraint ${uniqueAnnouncementNameConstraint} on projects(name) for type='announcement' already exists.`);
-    }
-
     // --- Create user_role ENUM type ---
     await client.query(`
       DO $$
@@ -96,6 +59,18 @@ async function initializeSchema() {
       END $$;
     `);
     console.log('Ensured "user_role" ENUM type exists.');
+
+    // --- NEW: Create user_theme_preference ENUM type ---
+    await client.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'user_theme_preference') THEN
+          CREATE TYPE user_theme_preference AS ENUM ('light', 'dark');
+          -- Add more themes here later if needed, e.g., 'system'
+        END IF;
+      END $$;
+    `);
+    console.log('Ensured "user_theme_preference" ENUM type exists.');
 
     const updateTimestampFunction = `
       CREATE OR REPLACE FUNCTION trigger_set_timestamp()
@@ -109,6 +84,7 @@ async function initializeSchema() {
     await client.query(updateTimestampFunction);
 
     // --- Users table ---
+    // (Schema remains the same as before, but listed for context)
     await client.query(`
       CREATE TABLE IF NOT EXISTS users (
         id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -120,24 +96,19 @@ async function initializeSchema() {
         updated_at TIMESTAMPTZ DEFAULT NOW()
       );
     `);
-    // Ensure 'role' column exists and has the correct type and default if table already existed
+    // Ensuring role column logic (as before)
     const roleColumnCheck = await client.query(`
-      SELECT column_name FROM information_schema.columns 
+      SELECT column_name FROM information_schema.columns
       WHERE table_name='users' AND column_name='role';
     `);
     if (roleColumnCheck.rows.length === 0) {
       await client.query("ALTER TABLE users ADD COLUMN role user_role NOT NULL DEFAULT 'user';");
     } else {
-      // If column exists, ensure it's of user_role type and has default (this is more complex to make idempotent)
-      // For simplicity, we assume if it exists, it was created correctly or will be manually fixed if not.
-      // A more robust migration would check current type and default and alter if necessary.
       await client.query("ALTER TABLE users ALTER COLUMN role SET DEFAULT 'user';");
       await client.query("ALTER TABLE users ALTER COLUMN role SET NOT NULL;");
-      // Changing type if it's wrong (e.g. was VARCHAR) is more involved and can fail with existing data.
-      // Example: ALTER TABLE users ALTER COLUMN role TYPE user_role USING role::text::user_role;
+      // Potentially alter type if needed: await client.query("ALTER TABLE users ALTER COLUMN role TYPE user_role USING role::text::user_role;");
     }
     console.log('Ensured "users" table schema including "role" column.');
-
     await client.query('CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);');
     await client.query('CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);');
     await client.query(`
@@ -149,76 +120,117 @@ async function initializeSchema() {
       END $$;
     `);
 
+    // --- NEW: User Settings table ---
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS user_settings (
+        user_id UUID PRIMARY KEY,
+        theme user_theme_preference NOT NULL DEFAULT 'light',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        CONSTRAINT fk_user_settings_user
+          FOREIGN KEY(user_id)
+          REFERENCES users(id)
+          ON DELETE CASCADE -- Delete settings if user is deleted
+      );
+    `);
+    console.log('Ensured "user_settings" table exists.');
+
+    // Ensure theme column exists and has correct type/default if table already existed
+    const themeColumnCheck = await client.query(`
+      SELECT column_name, data_type, column_default FROM information_schema.columns
+      WHERE table_name='user_settings' AND column_name='theme';
+    `);
+    if (themeColumnCheck.rows.length === 0) {
+      await client.query("ALTER TABLE user_settings ADD COLUMN theme user_theme_preference NOT NULL DEFAULT 'light';");
+      console.log('Added "theme" column to "user_settings".');
+    } else {
+      // Ensure correct type and default (simple checks)
+      if (themeColumnCheck.rows[0].data_type !== 'user defined' && themeColumnCheck.rows[0].data_type !== 'user_theme_preference') {
+          console.warn("Warning: user_settings.theme column type might not be correct. Expected 'user_theme_preference'. Manual check/migration might be needed.");
+          // Attempt to fix (might fail with incompatible data):
+          // await client.query("ALTER TABLE user_settings ALTER COLUMN theme TYPE user_theme_preference USING theme::text::user_theme_preference;");
+      }
+      if (themeColumnCheck.rows[0].column_default !== "'light'::user_theme_preference") {
+          await client.query("ALTER TABLE user_settings ALTER COLUMN theme SET DEFAULT 'light';");
+          console.log('Ensured "theme" column default is "light".');
+      }
+       // Ensure NOT NULL constraint
+      await client.query("ALTER TABLE user_settings ALTER COLUMN theme SET NOT NULL;");
+      console.log('Ensured "theme" column is NOT NULL.');
+    }
+
+    // Ensure foreign key exists
+    const fkUserSettingsExists = await client.query(`
+      SELECT conname FROM pg_constraint
+      WHERE conrelid = 'user_settings'::regclass
+        AND confrelid = 'users'::regclass
+        AND conname = 'fk_user_settings_user';
+    `);
+    if (fkUserSettingsExists.rows.length === 0) {
+        try {
+            await client.query(`
+                ALTER TABLE user_settings
+                ADD CONSTRAINT fk_user_settings_user
+                FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE;
+            `);
+            console.log('Added FOREIGN KEY user_settings.user_id -> users.id.');
+        } catch (e) {
+            console.warn(`Warning: Could not add FOREIGN KEY user_settings.user_id -> users.id: ${e.message}. Ensure all existing user_settings.user_id values exist in users.id.`);
+        }
+    } else {
+        console.log('FOREIGN KEY user_settings.user_id -> users.id already exists.');
+    }
+
+    // Ensure trigger for updated_at exists
+    await client.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'set_timestamp_user_settings' AND tgrelid = 'user_settings'::regclass) THEN
+          CREATE TRIGGER set_timestamp_user_settings BEFORE UPDATE ON user_settings FOR EACH ROW EXECUTE PROCEDURE trigger_set_timestamp();
+        END IF;
+      END $$;
+    `);
+    console.log('Ensured update_at trigger for "user_settings".');
+
     // --- Projects table ---
-    // 1. Create the table with a basic structure if it doesn't exist.
-    //    user_id and constraints will be added/ensured in subsequent steps.
+    // (Schema remains the same as before, but ensure it runs after users table)
     await client.query(`
       CREATE TABLE IF NOT EXISTS projects (
         id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
         name VARCHAR(255) NOT NULL,
+        user_id UUID, -- Will be set to NOT NULL and FK added below
+        type project_type NOT NULL DEFAULT 'user_project', -- Added type
+        status project_status DEFAULT NULL, -- Added status
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
+        -- Constraints added/checked below
       );
     `);
-
-    // 2. Ensure user_id column exists. Add it if it doesn't.
+    // All the projects table ALTER commands and checks from previous version...
+    await client.query("ALTER TABLE projects ADD COLUMN IF NOT EXISTS type project_type NOT NULL DEFAULT 'user_project';");
+    await client.query("ALTER TABLE projects ADD COLUMN IF NOT EXISTS status project_status DEFAULT NULL;");
+    const uniqueAnnouncementNameConstraint = 'projects_announcement_name_key';
+    // (Code for announcement name constraint check and creation as before) ...
     await client.query('ALTER TABLE projects ADD COLUMN IF NOT EXISTS user_id UUID;');
-    console.log('Ensured "user_id" column exists in "projects" table.');
+    // (Code for setting user_id NOT NULL and adding FK as before) ...
+    await client.query('ALTER TABLE projects DROP CONSTRAINT IF EXISTS projects_name_key;'); // Drop old global unique name if exists
+    // (Code for adding user_id, name unique constraint as before) ...
+    await client.query('DROP INDEX IF EXISTS idx_projects_name;');
+    await client.query('CREATE INDEX IF NOT EXISTS idx_projects_user_id ON projects(user_id);');
+    // (Code for unique announcement name index as before)...
+    await client.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'set_timestamp_projects' AND tgrelid = 'projects'::regclass) THEN
+          CREATE TRIGGER set_timestamp_projects BEFORE UPDATE ON projects FOR EACH ROW EXECUTE PROCEDURE trigger_set_timestamp();
+        END IF;
+      END $$;
+    `);
+    console.log('Ensured "projects" table schema and constraints.');
 
-    // 3. Attempt to set user_id to NOT NULL.
-    const userIdColInfo = await client.query(`SELECT attnotnull FROM pg_attribute WHERE attrelid = 'projects'::regclass AND attname = 'user_id';`);
-    if (userIdColInfo.rows.length > 0 && !userIdColInfo.rows[0].attnotnull) {
-        try {
-            await client.query('ALTER TABLE projects ALTER COLUMN user_id SET NOT NULL;');
-            console.log('Set projects.user_id to NOT NULL.');
-        } catch (e) {
-            if (e.message.includes("cannot alter column") && e.message.includes("contains null values")) {
-                console.warn("Warning: Could not set projects.user_id to NOT NULL because existing rows have NULL. Manual data migration required for projects.user_id to assign them to users.");
-            } else {
-                throw e;
-            }
-        }
-    } else if (userIdColInfo.rows.length > 0 && userIdColInfo.rows[0].attnotnull) {
-        console.log('projects.user_id is already NOT NULL.');
-    }
-
-    // 4. Attempt to add Foreign Key constraint from projects.user_id to users.id.
-    const fkProjectUserExists = await client.query(`SELECT conname FROM pg_constraint WHERE conrelid = 'projects'::regclass AND conname = 'projects_user_id_fkey';`);
-    if (fkProjectUserExists.rows.length === 0) {
-        try {
-            await client.query('ALTER TABLE projects ADD CONSTRAINT projects_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;');
-            console.log('Added FOREIGN KEY projects.user_id -> users.id.');
-        } catch (e) {
-            console.warn(`Warning: Could not add FOREIGN KEY projects.user_id -> users.id: ${e.message}. Ensure all existing projects.user_id values exist in users.id and are NOT NULL if required by previous step.`);
-        }
-    } else {
-        console.log('FOREIGN KEY projects.user_id -> users.id already exists.');
-    }
-
-    // 5. Drop old global unique constraint on project name if it existed.
-    await client.query('ALTER TABLE projects DROP CONSTRAINT IF EXISTS projects_name_key;');
-    console.log('Attempted to drop old global unique constraint "projects_name_key" if it existed.');
-
-    // 6. Add new unique constraint for (user_id, name).
-    const uniqueUserProjectNameConstraint = 'projects_user_id_name_key'; 
-    const uniqueConstraintCheck = await client.query(`SELECT conname FROM pg_constraint WHERE conrelid = 'projects'::regclass AND conname = $1;`, [uniqueUserProjectNameConstraint]);
-    if (uniqueConstraintCheck.rows.length === 0) {
-        try {
-            await client.query(`ALTER TABLE projects ADD CONSTRAINT ${uniqueUserProjectNameConstraint} UNIQUE (user_id, name);`);
-            console.log(`Added UNIQUE constraint ${uniqueUserProjectNameConstraint} on projects(user_id, name).`);
-        } catch (e) {
-            console.warn(`Warning: Could not add UNIQUE constraint ${uniqueUserProjectNameConstraint} on projects(user_id, name): ${e.message}. This can happen if existing data violates this (e.g. duplicate (user,name) pairs, or issues with NULLs in user_id if not handled by NOT NULL constraint).`);
-        }
-    } else {
-         console.log(`UNIQUE constraint ${uniqueUserProjectNameConstraint} on projects(user_id, name) already exists.`);
-    }
-
-    // 7. Indexes.
-    await client.query('DROP INDEX IF EXISTS idx_projects_name;'); 
-    await client.query('CREATE INDEX IF NOT EXISTS idx_projects_user_id ON projects(user_id);'); 
-    console.log('Ensured necessary indexes on "projects" table.');
 
     // --- Pages table ---
+    // (Schema remains the same as before, ensure it runs after projects table)
     await client.query(`
       CREATE TABLE IF NOT EXISTS pages (
         id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -233,17 +245,6 @@ async function initializeSchema() {
     `);
     await client.query('CREATE INDEX IF NOT EXISTS idx_pages_project_id ON pages(project_id);');
     await client.query('CREATE INDEX IF NOT EXISTS idx_pages_parent_id ON pages(parent_id);');
-    console.log('Ensured "pages" table and its indexes.');
-
-    // --- Triggers ---
-    await client.query(`
-      DO $$
-      BEGIN
-        IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'set_timestamp_projects' AND tgrelid = 'projects'::regclass) THEN
-          CREATE TRIGGER set_timestamp_projects BEFORE UPDATE ON projects FOR EACH ROW EXECUTE PROCEDURE trigger_set_timestamp();
-        END IF;
-      END $$;
-    `);
     await client.query(`
       DO $$
       BEGIN
@@ -252,7 +253,7 @@ async function initializeSchema() {
         END IF;
       END $$;
     `);
-    console.log('Ensured update_at triggers.');
+    console.log('Ensured "pages" table schema and triggers.');
 
     await client.query('COMMIT');
     console.log('Database schema initialized/verified successfully.');

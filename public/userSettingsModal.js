@@ -5,15 +5,17 @@ export function initUserSettingsModal(appContext) {
     let sidePanelList, contentArea;
     let currentActiveCategory = 'account'; // Default category
 
+    // *** Updated categories ***
     const categories = [
         { id: 'account', label: 'Account', icon: 'fa-user-cog' },
-        { id: 'comingSoon', label: 'Coming Soon', icon: 'fa-hourglass-half' },
+        { id: 'appearance', label: 'Appearance', icon: 'fa-palette' }, // Added
+        // { id: 'comingSoon', label: 'Coming Soon', icon: 'fa-hourglass-half' }, // Can keep or remove
         // Add more categories here in the future
-        // { id: 'appearance', label: 'Appearance', icon: 'fa-palette' },
         // { id: 'notifications', label: 'Notifications', icon: 'fa-bell' },
     ];
 
-    if (!modal) {
+    // ... (rest of the modal creation/finding logic remains the same) ...
+     if (!modal) {
         modal = document.createElement('div');
         modal.id = 'user-settings-modal';
         modal.classList.add('user-settings-modal');
@@ -30,11 +32,9 @@ export function initUserSettingsModal(appContext) {
 
         headerProfileIcon = document.createElement('div');
         headerProfileIcon.classList.add('usp-header-profile-icon');
-        // Populated by populateHeaderUserInfo
 
         headerUsername = document.createElement('span');
         headerUsername.classList.add('usp-header-username');
-        // Populated by populateHeaderUserInfo
 
         profileInfoContainer.appendChild(headerProfileIcon);
         profileInfoContainer.appendChild(headerUsername);
@@ -42,7 +42,7 @@ export function initUserSettingsModal(appContext) {
         closeBtn = document.createElement('button');
         closeBtn.classList.add('close-btn');
         closeBtn.title = 'Close';
-        closeBtn.innerHTML = '×'; // Using times symbol for close
+        closeBtn.innerHTML = '×';
 
         modalHeader.appendChild(profileInfoContainer);
         modalHeader.appendChild(closeBtn);
@@ -59,7 +59,6 @@ export function initUserSettingsModal(appContext) {
 
         contentArea = document.createElement('div');
         contentArea.classList.add('usm-content-area');
-        // Content list will be created/managed by renderContentForCategory
 
         modalBody.appendChild(sidePanel);
         modalBody.appendChild(contentArea);
@@ -69,7 +68,6 @@ export function initUserSettingsModal(appContext) {
         modal.appendChild(modalContent);
         document.body.appendChild(modal);
     } else {
-        // Modal already exists, find its parts
         headerProfileIcon = modal.querySelector('.usp-header-profile-icon');
         headerUsername = modal.querySelector('.usp-header-username');
         closeBtn = modal.querySelector('.user-settings-modal-header .close-btn');
@@ -86,6 +84,7 @@ export function initUserSettingsModal(appContext) {
 
     appContext.userSettingsModal = modal;
 
+    // ... (populateHeaderUserInfo function remains the same) ...
     function populateHeaderUserInfo() {
         if (appContext.currentUser) {
             headerProfileIcon.textContent = appContext.currentUser.username ? appContext.currentUser.username.charAt(0).toUpperCase() : '?';
@@ -95,12 +94,11 @@ export function initUserSettingsModal(appContext) {
         } else {
             headerProfileIcon.textContent = '?';
             headerUsername.textContent = 'User Not Identified';
-            // Optionally hide or style them differently if no user
-            // headerProfileIcon.style.display = 'none';
-            // headerUsername.style.display = 'none';
         }
     }
 
+
+    // ... (renderSidePanel function remains the same) ...
     function renderSidePanel() {
         sidePanelList.innerHTML = ''; // Clear previous items
         categories.forEach(category => {
@@ -126,6 +124,8 @@ export function initUserSettingsModal(appContext) {
         });
     }
 
+
+    // *** Updated renderContentForCategory ***
     function renderContentForCategory(categoryId) {
         contentArea.innerHTML = ''; // Clear previous content
         const contentList = document.createElement('ul');
@@ -147,28 +147,113 @@ export function initUserSettingsModal(appContext) {
                     // Add more account-specific settings here
                 ];
                 populateActionList(contentList, accountActions);
+                contentArea.appendChild(contentList); // Append list for account
                 break;
-            case 'comingSoon':
-                const placeholder = document.createElement('div');
-                placeholder.classList.add('usm-placeholder-content');
-                placeholder.textContent = 'More settings and features are coming soon!';
-                contentArea.appendChild(placeholder);
-                return; // No list for placeholder
-            // Add cases for other categories
-            // case 'appearance':
-            //     // populate appearance settings
+
+            case 'appearance':
+                // No list needed, just render the controls directly
+                renderAppearanceSettings(contentArea);
+                break; // Don't append the empty contentList
+
+            // case 'comingSoon': // Keep or remove as needed
+            //     const placeholder = document.createElement('div');
+            //     placeholder.classList.add('usm-placeholder-content');
+            //     placeholder.textContent = 'More settings and features are coming soon!';
+            //     contentArea.appendChild(placeholder);
             //     break;
+
             default:
                 const defaultText = document.createElement('p');
                 defaultText.textContent = 'Select a category to see settings.';
                 defaultText.style.padding = '20px';
                 defaultText.style.color = 'var(--text-secondary)';
                 contentArea.appendChild(defaultText);
-                return;
+                break; // Don't append the empty contentList
         }
-        contentArea.appendChild(contentList);
+        // Only append contentList if it was used (e.g., for 'account')
+        // if (contentList.hasChildNodes()) {
+        //     contentArea.appendChild(contentList);
+        // }
     }
 
+    // *** NEW function to render appearance settings ***
+    function renderAppearanceSettings(container) {
+        container.innerHTML = ''; // Clear container first
+        const sectionTitle = document.createElement('h3');
+        sectionTitle.textContent = 'Theme';
+        sectionTitle.classList.add('usm-content-title'); // Add class for styling
+
+        const themeOptionsDiv = document.createElement('div');
+        themeOptionsDiv.classList.add('usm-theme-options');
+
+        const themes = ['light', 'dark'];
+        let currentTheme = appContext.userSettings?.theme || 'light'; // Get current theme from context
+
+        themes.forEach(theme => {
+            const button = document.createElement('button');
+            button.textContent = theme.charAt(0).toUpperCase() + theme.slice(1); // Capitalize
+            button.dataset.theme = theme;
+            button.classList.add('usm-theme-button');
+            if (theme === currentTheme) {
+                button.classList.add('usm-active');
+            }
+
+            button.addEventListener('click', async () => {
+                const selectedTheme = button.dataset.theme;
+                if (selectedTheme === currentTheme) return; // No change
+
+                // Visually update buttons immediately
+                themeOptionsDiv.querySelectorAll('.usm-theme-button').forEach(btn => {
+                    btn.classList.remove('usm-active');
+                });
+                button.classList.add('usm-active');
+                currentTheme = selectedTheme; // Update local state
+
+                // Apply theme visually immediately
+                if (appContext.applyTheme) {
+                    appContext.applyTheme(selectedTheme);
+                }
+
+                // Save setting to backend
+                try {
+                    const response = await appContext.fetchWithAuth('/api/settings', {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ theme: selectedTheme })
+                    });
+                    if (!response.ok) {
+                        throw new Error(`Failed to save theme: ${response.statusText}`);
+                    }
+                    const result = await response.json();
+                    // Update context if necessary (applyTheme already does this)
+                     if (appContext.userSettings) {
+                         appContext.userSettings.theme = result.settings.theme;
+                     }
+                    // Optional: Show success status
+                     if(appContext.showStatus) appContext.showStatus("Theme updated.", "success", 1500);
+
+                } catch (error) {
+                    console.error("Error saving theme:", error);
+                    if(appContext.showStatus) appContext.showStatus(`Error saving theme: ${error.message}`, "error");
+                    // Revert visual state if save failed? Or let user retry?
+                    // For simplicity, we'll leave the visual state as selected for now.
+                     // Revert buttons:
+                     // themeOptionsDiv.querySelectorAll('.usm-theme-button').forEach(btn => {
+                     //     btn.classList.toggle('usm-active', btn.dataset.theme === (appContext.userSettings?.theme || 'light'));
+                     // });
+                     // currentTheme = appContext.userSettings?.theme || 'light';
+                     // appContext.applyTheme(currentTheme); // Revert theme
+                }
+            });
+            themeOptionsDiv.appendChild(button);
+        });
+
+        container.appendChild(sectionTitle);
+        container.appendChild(themeOptionsDiv);
+    }
+
+
+    // ... (populateActionList function remains the same) ...
     function populateActionList(listElement, actions) {
         if (actions.length === 0) {
             const li = document.createElement('li');
@@ -195,33 +280,35 @@ export function initUserSettingsModal(appContext) {
     }
 
 
+    // ... (openModal, closeModal, event listeners remain the same) ...
     function openModal() {
+        if (!appContext.currentUser) {
+             console.warn("Cannot open user settings modal: User not logged in.");
+             if (appContext.showStatus) appContext.showStatus("Please log in to access settings.", "error");
+             return; // Don't open if not logged in
+        }
         populateHeaderUserInfo();
         currentActiveCategory = 'account'; // Reset to default category
         renderSidePanel();
         renderContentForCategory(currentActiveCategory);
         modal.style.display = 'block';
-        // Focus the first interactive element or the modal itself for accessibility
-        modal.setAttribute('tabindex', '-1'); // Make modal focusable
+        modal.setAttribute('tabindex', '-1');
         modal.focus();
     }
 
     function closeModal() {
         modal.style.display = 'none';
-        modal.removeAttribute('tabindex'); // Clean up
+        modal.removeAttribute('tabindex');
     }
 
     appContext.openUserSettingsModal = openModal;
     appContext.closeUserSettingsModal = closeModal;
 
-    // Event Listeners
     closeBtn.addEventListener('click', closeModal);
 
     modal.addEventListener('click', (event) => {
-        if (event.target === modal) { // Click outside the modal content
+        if (event.target === modal) {
             closeModal();
         }
     });
-
-    // Escape key is handled globally in main.js and will call appContext.closeUserSettingsModal
 }

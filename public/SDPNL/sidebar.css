@@ -116,9 +116,22 @@
     display: flex;
     flex-direction: column;
     height: 100vh;
-    position: sticky;
+    position: sticky; /* Keep sticky if you want it to scroll independently if its content overflows */
+    /* position: relative; */ /* Use relative if sticky is not desired */
     top: 0;
     border-right: 1px solid var(--border-color-primary);
+    flex-shrink: 0; /* IMPORTANT: Prevent the sidebar from shrinking due to flexbox rules */
+    overflow: hidden; /* IMPORTANT: Hide content that overflows when width is 0 */
+    transition: width 0.3s ease, padding 0.3s ease, border 0.3s ease; /* Add transitions */
+}
+
+/* Collapsed State - applied via body class */
+body.sidebar-collapsed .sidebar {
+    width: var(--sidebar-width-collapsed); /* Use the variable */
+    padding-left: 0;
+    padding-right: 0;
+    border-right: none;
+    /* Overflow hidden is already set */
 }
 
 /* Generic Sidebar Section Header Styling */
@@ -190,7 +203,6 @@
 #pageTreeContainer, /* For Projects */
 #announcements-content-area /* For Announcements */
 {
-    flex-grow: 1;
     overflow-y: auto;
     font-size: 0.95em;
     overflow-x: hidden;
@@ -223,7 +235,7 @@
     font-weight: 500;
     color: var(--text-secondary);
     position: relative;
-    width: 90%; /* To allow scrollbar space without shifting content */
+    width: 100%; /* To allow scrollbar space without shifting content */
 }
 .project-header:hover,
 .announcement-header:hover {
@@ -335,7 +347,7 @@ li.page:not(.has-children) .page-expand-icon {
     transition: background-color 0.15s ease, color 0.15s ease;
     position: relative; 
     color: var(--text-secondary); 
-    width: 90%; /* To allow scrollbar space without shifting content */
+    width: 100%; /* To allow scrollbar space without shifting content */
 }
 
 .page-item-header .page-expand-icon { /* Common for project/announcement page chevrons */

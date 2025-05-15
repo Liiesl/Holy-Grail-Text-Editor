@@ -1,41 +1,93 @@
 /* --- START OF FILE style.css --- */
 
+/* --- START OF FILE style.css --- */
+
 /* -------------------- */
 /* --- GLOBAL RESET & VARIABLES --- */
 /* -------------------- */
 :root {
-    --bg-primary: #191919; /* Notion-like very dark gray */
-    --bg-secondary: #202020; /* Slightly lighter for elements like sidebar */
-    --bg-tertiary: #2f2f2f; /* Hover states, modals */
-    --bg-input: #2c2c2c;
-    --bg-embed: #282828; /* Slightly lighter than input, for embeds */
-    --bg-overlay: rgba(0, 0, 0, 0.5); /* For potential future overlays */
-
-    --text-primary: #e0e0e0; /* Light gray for main text */
-    --text-secondary: #a0a0a0; /* Dimmer text */
-    --text-placeholder: #6c6c6c;
-    --text-inverted: #111; /* For elements on light backgrounds if any */
-    --text-embed-link: #c0c0c0; /* Custom color for embed links - brighter than secondary */
-
-
-    --border-color-primary: #333333;
-    --border-color-secondary: #4a4a4a; /* For active/focused states */
-
-    --accent-primary: #2E73E8; /* Notion's blue */
-    --accent-primary-hover: #255dba;
-    --accent-positive: #30D158; /* Green for success */
-    --accent-negative: #FF453A; /* Red for errors */
-    --accent-neutral: #57A6FF; /* Blue for info */
-
+    /* Font Stacks */
     --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+    --font-serif: Georgia, "Times New Roman", Times, serif;
     --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
 
+    /* Global Font Variable - This will be changed by JS */
+    --global-font-family: var(--font-sans); /* Default to sans-serif */
+
     --sidebar-width: 260px;
-    --header-height: 50px; /* Example, if you had a fixed header */
-    --border-radius: 6px; /* Softer radius */
-    --border-radius-small: 4px; /* For smaller elements like embeds */
+    --sidebar-width-collapsed: 0px;
+    --header-height: 50px;
+    --border-radius: 6px;
+    --border-radius-small: 4px;
+    --medium-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    --border-radius-md: 8px;
+
+    --accent-positive: #30D158;
+    --accent-negative: #FF453A;
+    --accent-neutral: #57A6FF;
+    --accent-primary-faded: rgba(46, 115, 232, 0.1);
+
+    --z-index-sidebar: 1000;
+    --z-index-sidebar-toggle: 1100;
+    --z-index-editor-controls: 1010;
+    --z-index-peek-modal-underlay: 1020;
+    --z-index-peek-modal: 1030;
+    --z-index-text-style-modal: 1040;
+    --z-index-user-settings-modal: 1050;
+    --z-index-more-options-modal: 1060;
+    --z-index-slash-command-modal: 1070;
+    --z-index-status-message: 1080;
+}
+
+
+/* --- Light Theme --- */
+body.theme-light {
+    --bg-primary: #ffffff;
+    --bg-secondary: #f7f7f7;
+    --bg-tertiary: #f0f0f0;
+    --bg-input: #f0f0f0;
+    --bg-embed: #f5f5f5;
+    --bg-overlay: rgba(50, 50, 50, 0.4);
+
+    --text-primary: #1a1a1a;
+    --text-secondary: #555555;
+    --text-placeholder: #999999;
+    --text-inverted: #ffffff;
+    --text-embed-link: #333333;
+
+    --border-color-primary: #e0e0e0;
+    --border-color-secondary: #cccccc;
+    --border-color-tertiary: #eaeaea;
+
+    --accent-primary: #007AFF;
+    --accent-primary-hover: #0056b3;
+    --medium-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+/* --- Dark Theme --- */
+body.theme-dark {
+    --bg-primary: #191919;
+    --bg-secondary: #202020;
+    --bg-tertiary: #2f2f2f;
+    --bg-input: #2c2c2c;
+    --bg-embed: #282828;
+    --bg-overlay: rgba(0, 0, 0, 0.5);
+
+    --text-primary: #e0e0e0;
+    --text-secondary: #a0a0a0;
+    --text-placeholder: #6c6c6c;
+    --text-inverted: #111;
+    --text-embed-link: #c0c0c0;
+
+    --border-color-primary: #333333;
+    --border-color-secondary: #4a4a4a;
+    --border-color-tertiary: #2a2a2a;
+
+    --accent-primary: #2E73E8;
+    --accent-primary-hover: #255dba;
     --medium-shadow: 0 4px 12px rgba(0,0,0,0.3);
 }
+
 
 *, *::before, *::after {
     box-sizing: border-box;
@@ -44,20 +96,20 @@
 }
 
 body {
-    font-family: var(--font-sans);
+    font-family: var(--global-font-family); /* Use the global font variable */
     background-color: var(--bg-primary);
     color: var(--text-primary);
     display: flex;
     min-height: 100vh;
-    font-size: 15px; /* Base font size */
+    font-size: 15px;
     line-height: 1.5;
-    overflow: hidden; /* ADDED: Prevent body scroll when sidebar and editor manage their own */
+    overflow: hidden;
+    transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 .container {
     display: flex;
     width: 100%;
-    /* height: 100vh; */ /* Consider removing if body overflow:hidden and children manage height */
 }
 
 /* -------------------- */
@@ -65,24 +117,23 @@ body {
 /* -------------------- */
 .editor-area {
     flex-grow: 1;
-    padding: 0 10px 25px 10px; /* Top padding removed, handled by top-bar's margin/padding */
-                               /* Bottom padding added for scrollable area */
+    padding: 0 10px 25px 10px;
     display: flex;
     flex-direction: column;
-    height: 100vh; /* ADDED: Make editor area take full viewport height */
-    position: relative; 
-    /* overflow-y: auto; */ /* REMOVED: Editor area itself does not scroll */
+    height: 100vh;
+    position: relative;
+    transition: padding-left 0.3s ease;
 }
 
-/* --- SAVE BUTTON & STATUS --- (Moved before editor-panes for structure) */
+/* --- SAVE BUTTON & STATUS --- */
 .editor-top-bar {
     display: flex;
-    flex-direction: row; /* Default, but explicit */
+    flex-direction: row;
     justify-content: space-between;
-    align-items: center; /* Align items vertically */
-    padding-top: 25px; /* Top padding for the whole editor area content */
+    align-items: center;
+    padding-top: 25px;
     margin-bottom: 5px;
-    flex-shrink: 0; /* ADDED: Prevent this from shrinking */
+    flex-shrink: 0;
 }
 
 #current-page-display {
@@ -92,18 +143,17 @@ body {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    margin-right: 15px; /* Space between title and actions */
+    margin-right: 15px;
     line-height: 1.3;
-    margin: 0; /* Remove default h3 margin */
-    flex-grow: 1; /* Allow title to take available space */
+    margin: 0;
+    flex-grow: 1;
 }
 
 #status-message {
-    /* margin-top: 15px; */ /* Removed, alignment handled by flexbox in top-bar */
     font-size: 0.9em;
-    min-height: 1.2em; /* Reserve space */
+    min-height: 1.2em;
     font-weight: 500;
-    text-align: right; /* Align status to the right, next to save button */
+    text-align: right;
 }
 .success { color: var(--accent-positive); }
 .error { color: var(--accent-negative); }
@@ -112,24 +162,23 @@ body {
 .editor-top-bar-actions {
     display: flex;
     align-items: center;
-    gap: 8px; /* Spacing between status, save, and more options button */
+    gap: 8px;
 }
 
 #save-page-btn {
     padding: 10px 20px;
-    background-color: var(--accent-primary); 
+    background-color: var(--accent-primary);
     color: white;
     border: none;
     border-radius: var(--border-radius);
     cursor: pointer;
-    /* align-self: flex-start; */ /* Removed, alignment handled by flexbox in top-bar */
     font-size: 0.95em;
     font-weight: 500;
     transition: background-color 0.15s ease;
     display: flex;
     align-items: center;
     gap: 8px;
-    flex-shrink: 0; /* Prevent button from shrinking */
+    flex-shrink: 0;
 }
 #save-page-btn:disabled {
     background-color: var(--bg-tertiary);
@@ -137,7 +186,7 @@ body {
     cursor: not-allowed;
 }
 #save-page-btn:hover:not(:disabled) {
-    background-color: var(--accent-primary-hover); 
+    background-color: var(--accent-primary-hover);
 }
 
 /* More Options Button */
@@ -147,19 +196,23 @@ body {
     border: none;
     border-radius: var(--border-radius-small);
     cursor: pointer;
-    padding: 8px; /* Square-ish clickable area */
-    font-size: 1em; /* Icon size */
-    line-height: 1; /* Ensure icon is centered */
+    padding: 8px;
+    font-size: 1em;
+    line-height: 1;
     transition: background-color 0.15s ease, color 0.15s ease;
 }
 #more-options-btn:hover {
     background-color: var(--bg-tertiary);
     color: var(--text-primary);
 }
+
+body.sidebar-collapsed .editor-area {
+    padding-left: 40px;
+}
+
 /* -------------------- */
 /* --- UTILITIES & SCROLLBARS --- */
 /* -------------------- */
-/* Minimalist scrollbar styling (Webkit browsers) */
 ::-webkit-scrollbar {
     width: 8px;
     height: 8px;
@@ -172,9 +225,8 @@ body {
     border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-    background: #555; /* Slightly lighter on hover */
+    background: var(--text-placeholder);
 }
-/* For Firefox */
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--bg-tertiary) var(--bg-secondary);
@@ -194,112 +246,77 @@ body {
     justify-content: center;
     cursor: pointer;
     box-shadow: var(--medium-shadow);
-    z-index: 1015; /* Above editor content, below textStyleModal (1050) */
+    z-index: var(--z-index-editor-controls);
     transition: background-color 0.1s ease, color 0.1s ease, transform 0.05s ease, opacity 0.15s ease;
-    opacity: 0; /* Hidden by default, shown on hover trigger */
+    opacity: 0;
 }
 .table-control-base:hover {
     background-color: var(--accent-primary);
     color: white;
     opacity: 1;
-    transform: scale(1.05); /* Slightly less aggressive scale */
+    transform: scale(1.05);
 }
 .table-control-base.visible {
-    opacity: 0.85; /* Visible state before hover */
+    opacity: 0.85;
 }
 .table-control-base.visible:hover {
     opacity: 1;
 }
 
-
-/* Add Line Buttons (Horizontal for Rows, Vertical for Columns) */
-/* This is now the main styled rectangle button */
 .table-control-add-line {
     position: absolute;
-    background-color: var(--bg-tertiary); /* Default background like other controls */
-    border: 1px solid var(--border-color-primary); /* Default border */
-    color: var(--text-secondary); /* Default icon color */
-    box-shadow: var(--medium-shadow); /* Shadow like other controls */
+    background-color: var(--bg-tertiary);
+    border: 1px solid var(--border-color-primary);
+    color: var(--text-secondary);
+    box-shadow: var(--medium-shadow);
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    z-index: 1016; /* Ensure it's visible */
+    z-index: calc(var(--z-index-editor-controls) + 1);
     opacity: 0;
-    transition: background-color 0.1s ease, color 0.1s ease, opacity 0.15s ease, transform 0.05s ease;
-    pointer-events: none; /* Container doesn't take events initially */
+    transition: background-color 0.1s ease, color 0.1s ease, opacity 0.15s ease, transform 0.05s ease, border-color 0.1s ease;
+    pointer-events: none;
 }
 .table-control-add-line.visible {
-    opacity: 0.85; /* Matches .table-control-base.visible */
-    pointer-events: all; /* Enable events when visible */
+    opacity: 0.85;
+    pointer-events: all;
 }
 .table-control-add-line:hover {
-    background-color: var(--accent-primary); /* Hover background like other controls */
-    color: white; /* Icon color changes to white on hover */
-    border-color: var(--accent-primary-hover); /* Optional: darker border on hover */
+    background-color: var(--accent-primary);
+    color: white;
+    border-color: var(--accent-primary-hover);
     opacity: 1;
-    transform: scale(1.02); /* Subtle scale effect */
+    transform: scale(1.02);
 }
-
-/* The ::before pseudo-element is no longer used for the visible line part */
-.table-control-add-line::before {
-    display: none;
-}
-
-.table-control-add-line .add-line-icon { /* The plus icon span */
-    font-size: 7px; /* Size of the '+' icon character */
-    color: inherit; /* Icon color is inherited from .table-control-add-line */
-    background-color: transparent; /* No background for the icon wrapper itself */
-    border: none; /* No border for the icon wrapper itself */
-    box-shadow: none; /* No shadow for the icon wrapper itself */
-    width: auto; /* Let the icon character determine width */
-    height: auto; /* Let the icon character determine height */
-    border-radius: 0; /* No rounded corners for the icon wrapper */
+.table-control-add-line::before { display: none; }
+.table-control-add-line .add-line-icon {
+    font-size: 7px;
+    color: inherit;
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
+    width: auto;
+    height: auto;
+    border-radius: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    pointer-events: all; /* Make sure icon part is clickable */
+    pointer-events: all;
 }
-/* No separate hover effect for .add-line-icon, parent .table-control-add-line handles it */
-.table-control-add-line:hover .add-line-icon {
-    transform: none; /* Remove previous transform if any */
-}
+.table-control-add-line:hover .add-line-icon { transform: none; }
+.table-control-add-line-h { left: 0; }
+.table-control-add-line-v { top: 0; }
 
-
-/* Horizontal Add Line (for Rows) */
-.table-control-add-line-h {
-    /* height will be set by JS to a fixed value (e.g., 20px) - this is the "thickness" of the bar */
-    /* width will be set by JS to table width */
-    left: 0; /* Aligns with table left, JS will adjust */
-}
-/* No ::before styling needed here anymore */
-
-
-/* Vertical Add Line (for Columns) */
-.table-control-add-line-v {
-    /* width will be set by JS to a fixed value (e.g., 20px) - this is the "thickness" of the bar */
-    /* height will be set by JS to table height */
-    top: 0; /* Aligns with table top, JS will adjust */
-}
-/* No ::before styling needed here anymore */
-
-
-/* Menu Trigger Button (...) */
 .table-control-menu-trigger {
-    /* Inherits from .table-control-base for opacity, z-index, transition */
     border-radius: var(--border-radius-small);
-    width: 24px; /* Small rectangle */
+    width: 24px;
     height: 24px;
-    font-size: 14px; /* For ellipsis or icon */
-    padding: 0; /* Remove padding if icon is sized well */
+    font-size: 14px;
+    padding: 0;
 }
-.table-control-menu-trigger.visible {
-    opacity: 0.7;
-}
-.table-control-menu-trigger.visible:hover {
-    opacity: 1;
-    transform: scale(1.1);
-}
+.table-control-menu-trigger.visible { opacity: 0.7; }
+.table-control-menu-trigger.visible:hover { opacity: 1; transform: scale(1.1); }
 
 /* -------------------- */
 /* --- MORE OPTIONS MODAL --- */
@@ -310,9 +327,9 @@ body {
     border: 1px solid var(--border-color-primary);
     border-radius: var(--border-radius);
     box-shadow: var(--medium-shadow);
-    z-index: 1060; /* Above textStyleModal (1050) */
-    padding: 6px 0; /* Vertical padding for the container */
-    min-width: 240px; /* Adjust as needed */
+    z-index: var(--z-index-more-options-modal);
+    padding: 6px 0;
+    min-width: 240px;
     color: var(--text-primary);
 }
 
@@ -325,74 +342,137 @@ body {
 .more-options-item {
     display: flex;
     align-items: center;
-    justify-content: space-between; /* For label on left, content/icon on right */
-    padding: 8px 14px; /* More horizontal padding for items */
+    justify-content: space-between;
+    padding: 8px 14px;
     cursor: pointer;
     font-size: 0.9em;
-    gap: 12px; /* Space between elements within an item */
-    min-height: 36px; /* Consistent item height */
+    gap: 12px;
+    min-height: 36px;
 }
 
 .more-options-item:hover {
-    background-color: var(--bg-input); /* Subtle hover */
+    background-color: var(--bg-input);
 }
 
 .more-options-item .more-options-label {
-    flex-grow: 1; /* Label takes available space by default */
+    flex-grow: 1;
     white-space: nowrap;
 }
 
-/* For items with an icon before the label (Import/Export) */
 .more-options-item > i:first-child {
     color: var(--text-secondary);
     width: 16px;
     text-align: center;
-    margin-right: -2px; /* Adjust gap slightly if main gap is 12px */
+    margin-right: -2px; /* Adjust if icon looks off-center */
 }
 .more-options-item:hover > i:first-child {
     color: var(--text-primary);
 }
 
-/* Specific for font item */
-.more-options-font-item {
-    cursor: default;
-}
-.more-options-font-item:hover {
-    background-color: transparent; /* No hover for the container li */
-}
-.font-options-placeholder {
+/* Font specific styling */
+.more-options-item.font-selection-container {
     display: flex;
-    gap: 6px;
+    justify-content: space-between; /* Center the buttons in the row */
+    gap: 8px; /* Spacing between font buttons */
+    cursor: default;
+    /* Inherits padding: 8px 14px from .more-options-item */
+    /* Height will be determined by the taller font buttons + padding */
 }
-.font-placeholder-btn {
+
+.more-options-item.font-selection-container:hover {
+    background-color: transparent !important; /* Override item hover for this specific container */
+}
+
+.font-option-btn {
     background-color: var(--bg-input);
     border: 1px solid var(--border-color-primary);
     border-radius: var(--border-radius-small);
-    padding: 4px 8px;
-    font-size: 0.85em;
     cursor: pointer;
     color: var(--text-secondary);
-    transition: background-color 0.1s, border-color 0.1s, color 0.1s;
+    transition: background-color 0.1s, border-color 0.1s, color 0.1s, transform 0.1s;
+
+    width: 50px; /* Square button */
+    height: 50px; /* Square button */
+    padding: 0; /* Remove padding, using flex to center content */
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.8em; /* Size of "Aa" text */
+    line-height: 1; /* Ensure "Aa" is vertically centered */
+    /* font-family will be set by specific [data-font] attributes */
 }
-.font-placeholder-btn:hover {
+
+.font-option-btn:hover {
     border-color: var(--border-color-secondary);
     background-color: var(--bg-secondary);
     color: var(--text-primary);
+    transform: scale(1.05); /* Slight pop effect on hover */
 }
-.font-placeholder-btn.active {
+
+.font-option-btn.active {
     background-color: var(--accent-primary);
     color: white;
     border-color: var(--accent-primary-hover);
+    transform: scale(1); /* Reset transform if it was hovered */
 }
 
-/* Icon on the far right of an item */
-.editor-option-icon-right {
-color: var(--text-secondary);
-/* margin-left: auto; Done by justify-content: space-between on parent */
+/* Apply specific fonts to the buttons for preview */
+.font-option-btn[data-font="sans-serif"] {
+    font-family: var(--font-sans);
 }
-.more-options-item:hover .editor-option-icon-right {
-color: var(--text-primary);
+.font-option-btn[data-font="serif"] {
+    font-family: var(--font-serif);
+}
+.font-option-btn[data-font="monospace"] {
+    font-family: var(--font-mono);
 }
 
+
+.editor-option-icon-right { color: var(--text-secondary); }
+.more-options-item:hover .editor-option-icon-right { color: var(--text-primary); }
+
+/* --------------------------- */
+/* --- SIDEBAR TOGGLE BUTTON --- */
+/* --------------------------- */
+.sidebar-toggle-button {
+    position: fixed;
+    top: 10px;
+    left: calc(var(--sidebar-width) - 15px);
+    z-index: var(--z-index-sidebar-toggle);
+    background-color: var(--bg-secondary);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color-primary);
+    border-left: none;
+    border-radius: 0 var(--border-radius-small) var(--border-radius-small) 0;
+    width: 24px;
+    height: 35px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: left 0.3s ease, background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    padding: 0;
+    font-size: 0.9em;
+    line-height: 1;
+}
+
+.sidebar-toggle-button:hover {
+     background-color: var(--bg-tertiary);
+     color: var(--text-primary);
+}
+
+body.sidebar-collapsed .sidebar-toggle-button {
+    left: 5px;
+    border-left: 1px solid var(--border-color-primary);
+    border-right: 1px solid var(--border-color-primary);
+    border-radius: var(--border-radius-small);
+}
+
+/* Ensure placeholder color uses variables */
+#live-editor[data-placeholder]::before {
+    color: var(--text-placeholder);
+    /* other placeholder styles */
+}
 
 /* --- END OF FILE style.css --- */

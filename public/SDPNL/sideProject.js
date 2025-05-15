@@ -143,36 +143,38 @@ export function initSideProjectFunctions(appContext) {
     appContext.fetchProjects = async () => {
         if (!projectsContentArea) {
             console.error("Projects content area (pageTreeContainer) not found for fetchProjects");
-            return;
+            return null;
         }
         if (!appContext.currentUser) {
             projectsContentArea.innerHTML = '<p style="padding: 0 10px; font-size: 0.9em; color: var(--text-secondary);">Please log in to see projects.</p>';
             if (appContext.renderProjectsSectionHeader) appContext.renderProjectsSectionHeader(); // Handles header visibility
-            return;
+            return null;
         }
 
         if (appContext.renderProjectsSectionHeader) appContext.renderProjectsSectionHeader();
         
-        projectsContentArea.innerHTML = ''; 
+        projectsContentArea.innerHTML = ''; // Clear existing content
         const projectListUl = document.createElement('ul');
-        projectListUl.classList.add('project-list'); 
+        projectListUl.classList.add('project-list');
         projectsContentArea.appendChild(projectListUl);
 
+        let fetchedProjectsData = null; // Variable to store fetched data
+
         try {
-            if(showStatus) showStatus("Loading projects...", "info", 0);
+            if (showStatus) showStatus("Loading projects...", "info", 0);
             const response = await appContext.fetchWithAuth('/api/projects');
             if (!response.ok) {
                 const errData = await response.json().catch(() => ({}));
                 throw new Error(errData.error || `HTTP error! status: ${response.status}`);
             }
-            const projects = await response.json();
-            if(showStatus) showStatus("", "info", 0);
+            fetchedProjectsData = await response.json(); // Store the fetched data
+            if (showStatus) showStatus("", "info", 0);
 
-
-            if (projects.length === 0) {
+            if (!fetchedProjectsData || fetchedProjectsData.length === 0) {
                 projectListUl.innerHTML = '<li class="no-items-message" style="padding-left:10px;">No projects. Click "+" in header to create one.</li>';
-            } else { 
-                projects.forEach(projectData => { // Assuming API now returns { name, rootPageId (optional) }
+            } else {
+                // DOM Manipulation Logic (keep this to update the sidebar visually)
+                fetchedProjectsData.forEach(projectData => {
                     const projectName = typeof projectData === 'string' ? projectData : projectData.name;
                     const rootPageId = typeof projectData === 'string' ? null : projectData.rootPageId;
 
@@ -181,16 +183,15 @@ export function initSideProjectFunctions(appContext) {
                     projectLi.dataset.projectName = projectName;
                     if (rootPageId) projectLi.dataset.rootPageId = rootPageId;
 
-
                     const projectHeaderDiv = document.createElement('div');
                     projectHeaderDiv.classList.add('project-header');
 
-                    const chevronIcon = document.createElement('i'); 
+                    const chevronIcon = document.createElement('i');
                     chevronIcon.classList.add('fas', 'fa-chevron-right', 'project-expand-icon');
                     projectHeaderDiv.appendChild(chevronIcon);
 
                     const projectTypeIcon = document.createElement('i');
-                    projectTypeIcon.classList.add('fas', 'fa-book'); 
+                    projectTypeIcon.classList.add('fas', 'fa-book');
                     projectHeaderDiv.appendChild(projectTypeIcon);
 
                     const projectNameSpan = document.createElement('span');
@@ -203,17 +204,17 @@ export function initSideProjectFunctions(appContext) {
                     const moreProjectItemActionsBtn = appContext.createActionButton('fa-ellipsis-h', 'More Project Actions', (event) => {
                         if (appContext.openActionsModal) appContext.openActionsModal(event, 'project', projectName, projectName, projectName);
                     });
-                    const addPageToProjectBtn = appContext.createActionButton('fa-plus', 'Add Page to Project', () => { 
+                    const addPageToProjectBtn = appContext.createActionButton('fa-plus', 'Add Page to Project', () => {
                         if (appContext.createNewSubpage) appContext.createNewSubpage(projectName, null, projectName);
                     });
                     actionsGroup.appendChild(moreProjectItemActionsBtn);
                     actionsGroup.appendChild(addPageToProjectBtn);
                     projectHeaderDiv.appendChild(actionsGroup);
                     projectLi.appendChild(projectHeaderDiv);
-                    
-                    const projectPagesDiv = document.createElement('div'); 
+
+                    const projectPagesDiv = document.createElement('div');
                     projectPagesDiv.classList.add('project-pages-container');
-                    projectPagesDiv.style.display = 'none'; 
+                    projectPagesDiv.style.display = 'none';
                     projectLi.appendChild(projectPagesDiv);
 
                     chevronIcon.addEventListener('click', async (e) => {
@@ -223,10 +224,9 @@ export function initSideProjectFunctions(appContext) {
                         chevronIcon.classList.toggle('fa-chevron-down', isExpanded);
                         projectPagesDiv.style.display = isExpanded ? 'block' : 'none';
 
-                        if (isExpanded && (projectPagesDiv.children.length === 0 || projectPagesDiv.querySelector('.no-subpages-message'))) { 
+                        if (isExpanded && (projectPagesDiv.children.length === 0 || projectPagesDiv.querySelector('.no-subpages-message'))) {
                             if (appContext.fetchPageTree) {
-                                // Load tree, but don't auto-select/load a page unless project is also selected
-                                await appContext.fetchPageTree(projectName, null, projectPagesDiv, false); // false = don't load root page
+                                await appContext.fetchPageTree(projectName, null, projectPagesDiv, false);
                             }
                         }
                     });
@@ -237,17 +237,22 @@ export function initSideProjectFunctions(appContext) {
                             await appContext.selectProject(projectName, projectLi);
                         }
                     });
+                    // ... (end of LI creation)
                     projectListUl.appendChild(projectLi);
                 });
             }
+            // Return the fetched data regardless of whether it was empty or not
+            return fetchedProjectsData;
         } catch (error) {
             if (error.message && !error.message.toLowerCase().startsWith('auth error')) {
                 console.error('Error fetching projects:', error);
+                // Display error in the sidebar list
                 projectListUl.innerHTML = '<li class="error-message">Error loading projects.</li>';
                 if (showStatus) showStatus('Failed to load projects.', 'error');
             } else if (error.message) {
                 console.warn(`Auth error during fetchProjects: ${error.message}`);
             }
+            return null; // Return null on error
         }
     };
 
